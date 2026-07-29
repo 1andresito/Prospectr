@@ -1,3 +1,4 @@
+#calculate.py
 import math
 import os
 
@@ -68,6 +69,7 @@ def search_grid_cell(query, lat, lng, radius_meters):
             "places.websiteUri"
         ),
     }
+    
     # Query is business type only (e.g. "restaurants") so locationBias is respected.
     body = {
         "textQuery": query,

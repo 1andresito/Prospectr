@@ -4,9 +4,12 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 
 from calculate import geocode_location, generate_grid, search_grid_cell
+from env_manager import ENV_KEYS, get_key_status, save_keys
+import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR / ".env")
+ENV_PATH = BASE_DIR / ".env"
+load_dotenv(ENV_PATH)
 
 app = Flask(
     __name__,
@@ -31,6 +34,29 @@ def _place_to_result(place):
 @app.route("/")
 def home():
     return render_template("index.html")
+
+
+@app.route("/api/settings", methods=["GET"])
+def get_settings():
+    return jsonify(get_key_status(ENV_PATH))
+
+
+@app.route("/api/settings", methods=["POST"])
+def update_settings():
+    data = request.get_json(silent=True) or {}
+
+    allowed_names = {key_def["name"] for key_def in ENV_KEYS}
+    new_values = {name: value for name, value in data.items() if name in allowed_names}
+
+    if not new_values:
+        return jsonify({"error": "No valid keys provided"}), 400
+
+    updated = save_keys(ENV_PATH, new_values)
+
+    for key, value in updated.items():
+        os.environ[key] = value
+
+    return jsonify({"status": "saved"})
 
 
 @app.route("/api/search")

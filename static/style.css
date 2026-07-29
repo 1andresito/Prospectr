@@ -1,21 +1,28 @@
-
+/* Remove default browser margins so the map can fill the entire screen */
 body {
     margin: 0;
     padding: 0;
     font-family: sans-serif;
 }
 
-/* The map MUST have a height set, either here or inline, or nothing shows up. */
+body.loading-active {
+    overflow: hidden;
+}
+
+/* The map needs an explicit height, or it will collapse to 0px tall.
+   This is a common Leaflet beginner mistake - the map container
+   MUST have a height set, either here or inline, or nothing shows up. */
 #map {
     height: 100vh;
     width: 100%;
 }
 
+/* The search bar floats on top of the map, positioned in the corner */
 #search-bar {
     position: absolute;
     top: 10px;
     left: 50px;
-    z-index: 1000;
+    z-index: 1000;   /* ensures it sits above the map, not behind it */
     background: white;
     padding: 10px;
     border-radius: 8px;
@@ -30,4 +37,151 @@ body {
 #search-bar button {
     padding: 6px 12px;
     cursor: pointer;
+}
+
+#search-bar button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+#loading-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.35);
+    backdrop-filter: blur(2px);
+}
+
+#loading-overlay.hidden {
+    display: none;
+}
+
+.loading-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    min-width: 240px;
+    padding: 32px 40px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
+    text-align: center;
+}
+
+.loading-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid #e2e8f0;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+}
+
+.loading-text {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0f172a;
+    letter-spacing: -0.01em;
+}
+
+.loading-subtext {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+#settings-btn {
+    padding: 6px 10px;
+}
+
+#settings-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+#settings-overlay.hidden {
+    display: none;
+}
+
+.settings-panel {
+    width: 360px;
+    max-width: 90vw;
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 12px 40px rgba(15, 23, 42, 0.25);
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.settings-header h2 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.settings-header button {
+    border: none;
+    background: none;
+    font-size: 1.4rem;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.settings-field {
+    margin-bottom: 14px;
+}
+
+.settings-field label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.settings-field .settings-current {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin: 2px 0 6px 0;
+}
+
+.settings-field input {
+    width: 100%;
+    padding: 8px;
+    box-sizing: border-box;
+}
+
+#settings-save-btn {
+    width: 100%;
+    padding: 10px;
+    margin-top: 6px;
+    cursor: pointer;
+}
+
+.settings-status {
+    min-height: 1.2em;
+    font-size: 0.85rem;
+    color: #16a34a;
+    text-align: center;
+    margin: 8px 0 0 0;
 }
