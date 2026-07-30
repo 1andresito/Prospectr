@@ -1,3 +1,4 @@
+#app.py
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -5,6 +6,7 @@ from flask import Flask, jsonify, render_template, request
 
 from calculate import geocode_location, generate_grid, search_grid_cell
 from env_manager import ENV_KEYS, get_key_status, save_keys
+from analysis import generate_marketing_analysis
 import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,7 +21,7 @@ app = Flask(
 
 GRID_SIZE = 4
 GRID_SPACING_MILES = 1.5
-SEARCH_RADIUS_METERS = 1800  # ~1.1 miles; overlaps adjacent cells slightly
+SEARCH_RADIUS_METERS = 1800
 
 
 def _place_to_result(place):
@@ -67,6 +69,9 @@ def search_businesses():
     if not query or not location:
         return jsonify({"error": "Missing 'query' or 'location' parameter"}), 400
 
+    if not os.getenv("GOOGLE_PLACES_API_KEY"):
+        return jsonify({"error": "No API key set. Add your Google Places API key in Settings first."}), 400
+
     center = geocode_location(location)
     if center is None:
         return jsonify({"error": f"Could not find location: {location}"}), 400
@@ -90,6 +95,26 @@ def search_businesses():
     ]
 
     return jsonify(no_website_places)
+
+
+@app.route("/api/analyze", methods=["POST"])
+def analyze_business():
+    data = request.get_json(silent=True) or {}
+    name = data.get("name")
+    address = data.get("address")
+
+    if not name or not address:
+        return jsonify({"error": "Missing business name or address"}), 400
+
+    if not os.getenv("NVIDIA_API_KEY"):
+        return jsonify({"error": "No NVIDIA API key set. Add one in Settings first."}), 400
+
+    analysis = generate_marketing_analysis(name, address)
+
+    if analysis is None:
+        return jsonify({"error": "Analysis request failed. Check your NVIDIA API key and try again."}), 502
+
+    return jsonify({"analysis": analysis})
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+// script.js
 const map = L.map("map").setView([43.0731, -89.4012], 13);
 
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -6,19 +7,22 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 
 let currentMarkers = [];
 
+const loadingOverlay = document.getElementById("loading-overlay");
+
+function setLoading(isLoading) {
+    loadingOverlay.classList.toggle("hidden", !isLoading);
+    loadingOverlay.setAttribute("aria-hidden", String(!isLoading));
+}
+
+function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 function clearMarkers() {
     currentMarkers.forEach((marker) => map.removeLayer(marker));
     currentMarkers = [];
-}
-
-function setLoading(isLoading) {
-    const overlay = document.getElementById("loading-overlay");
-    const searchBtn = document.getElementById("search-btn");
-
-    overlay.classList.toggle("hidden", !isLoading);
-    overlay.setAttribute("aria-hidden", String(!isLoading));
-    document.body.classList.toggle("loading-active", isLoading);
-    searchBtn.disabled = isLoading;
 }
 
 async function searchBusinesses() {
@@ -30,11 +34,18 @@ async function searchBusinesses() {
         return;
     }
 
-    const url = `/api/search?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}`;
-
     setLoading(true);
 
     try {
+        const keyIsReady = await checkApiKeyStatus();
+        if (!keyIsReady) {
+            alert("No API key set. Please add your Google Places API key in Settings first.");
+            openSettings();
+            return;
+        }
+
+        const url = `/api/search?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}`;
+
         const response = await fetch(url);
         const businesses = await response.json();
 
@@ -56,12 +67,58 @@ async function searchBusinesses() {
 
             const marker = L.marker([biz.lat, biz.lng]).addTo(map);
 
-            marker.bindPopup(`<strong>${biz.name}</strong><br>${biz.address}`);
+            const safeName = escapeHtml(biz.name);
+            const safeAddress = escapeHtml(biz.address);
+
+            const popupHtml = `
+                <div class="popup-content">
+                    <strong>${safeName}</strong><br>
+                    ${safeAddress}<br>
+                    <button class="analyze-btn">Analyze Marketing Strategies</button>
+                </div>
+            `;
+
+            marker.bindPopup(popupHtml, { maxWidth: 280 });
+
+            marker.on("popupopen", () => {
+                const popupEl = marker.getPopup().getElement();
+                const oldBtn = popupEl.querySelector(".analyze-btn");
+            
+                const analyzeBtn = oldBtn.cloneNode(true);
+                oldBtn.replaceWith(analyzeBtn);
+            
+                analyzeBtn.addEventListener("click", async () => {
+                    analyzeBtn.disabled = true;
+                    analyzeBtn.textContent = "Analyzing...";
+            
+                    marker.closePopup();
+                    openAnalysisPanel(biz.name);
+            
+                    try {
+                        const response = await fetch("/api/analyze", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ name: biz.name, address: biz.address }),
+                        });
+                        const result = await response.json();
+            
+                        if (result.error) {
+                            showAnalysisError(result.error);
+                        } else {
+                            showAnalysisResult(result.analysis);
+                        }
+                    } catch (err) {
+                        showAnalysisError("Something went wrong. Please try again.");
+                    } finally {
+                        analyzeBtn.disabled = false;
+                        analyzeBtn.textContent = "Analyze Marketing Strategies";
+                    }
+                });
+            });
 
             currentMarkers.push(marker);
         });
 
-        // Re-center the map's view to fit all the new markers on screen.
         const group = new L.featureGroup(currentMarkers);
         map.fitBounds(group.getBounds().pad(0.2));
     } finally {
@@ -69,10 +126,7 @@ async function searchBusinesses() {
     }
 }
 
-// Wire the button click to trigger the search function above.
 document.getElementById("search-btn").addEventListener("click", searchBusinesses);
-
-// ---- Settings panel logic ----
 
 const settingsOverlay = document.getElementById("settings-overlay");
 const settingsFields = document.getElementById("settings-fields");
@@ -121,8 +175,6 @@ function closeSettings() {
     settingsOverlay.classList.add("hidden");
 }
 
-// Reads whatever was typed into each key's input field and sends
-// only the non-empty ones to the backend to be saved.
 async function saveSettings() {
     const inputs = settingsFields.querySelectorAll("input[data-key-name]");
     const payload = {};
@@ -148,7 +200,8 @@ async function saveSettings() {
 
     if (response.ok) {
         settingsStatus.textContent = "Saved.";
-        loadSettingsFields(); // refresh so the "currently set" preview updates
+        loadSettingsFields();
+        checkApiKeyStatus();
     } else {
         settingsStatus.textContent = "Error: " + (result.error || "could not save");
     }
@@ -157,3 +210,44 @@ async function saveSettings() {
 document.getElementById("settings-btn").addEventListener("click", openSettings);
 document.getElementById("settings-close-btn").addEventListener("click", closeSettings);
 document.getElementById("settings-save-btn").addEventListener("click", saveSettings);
+document.getElementById("warning-settings-link").addEventListener("click", openSettings);
+
+
+const analysisPanel = document.getElementById("analysis-panel");
+const analysisContent = document.getElementById("analysis-content");
+const analysisTitle = document.getElementById("analysis-panel-title");
+
+function openAnalysisPanel(businessName) {
+    analysisTitle.textContent = businessName;
+    analysisContent.innerHTML = '<p class="analysis-loading">Generating marketing suggestions...</p>';
+    analysisPanel.classList.remove("hidden");
+}
+
+function closeAnalysisPanel() {
+    analysisPanel.classList.add("hidden");
+}
+
+function showAnalysisResult(markdownText) {
+    const rawHtml = marked.parse(markdownText);
+    const safeHtml = DOMPurify.sanitize(rawHtml);
+    analysisContent.innerHTML = safeHtml;
+}
+
+function showAnalysisError(message) {
+    analysisContent.innerHTML = `<p class="analysis-loading">Error: ${escapeHtml(message)}</p>`;
+}
+
+document.getElementById("analysis-close-btn").addEventListener("click", closeAnalysisPanel);
+
+async function checkApiKeyStatus() {
+    const response = await fetch("/api/settings");
+    const keyStatuses = await response.json();
+
+    const googleKey = keyStatuses.find((k) => k.name === "GOOGLE_PLACES_API_KEY");
+    const isReady = Boolean(googleKey && googleKey.is_set);
+
+    document.getElementById("api-key-warning").classList.toggle("hidden", isReady);
+    return isReady;
+}
+
+checkApiKeyStatus();

@@ -1,3 +1,4 @@
+<!--index.html-->
 <!DOCTYPE html>
 <html>
 <head>
@@ -16,6 +17,11 @@
         <button id="settings-btn" title="Settings" aria-label="Settings">⚙️</button>
     </div>
 
+    <div id="api-key-warning" class="hidden">
+        No API key set —
+        <button id="warning-settings-link">add one in Settings</button>
+    </div>
+
     <div id="map"></div>
 
     <div id="loading-overlay" class="hidden" aria-hidden="true">
@@ -32,11 +38,22 @@
                 <h2>API Keys</h2>
                 <button id="settings-close-btn" aria-label="Close">&times;</button>
             </div>
-            <div id="settings-fields"><!-- filled in by script.js --></div>
+            <div id="settings-fields"></div>
             <button id="settings-save-btn">Save</button>
             <p id="settings-status" class="settings-status"></p>
         </div>
     </div>
+
+    <div id="analysis-panel" class="hidden" role="complementary" aria-label="Marketing analysis">
+        <div class="analysis-panel-header">
+            <h2 id="analysis-panel-title">Marketing Analysis</h2>
+            <button id="analysis-close-btn" aria-label="Close">&times;</button>
+        </div>
+        <div id="analysis-content"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.5/purify.min.js"></script>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
