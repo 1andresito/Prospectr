@@ -1,5 +1,6 @@
 import sys
 import threading
+import time
 import webbrowser
 from pathlib import Path
 
@@ -31,6 +32,28 @@ GRID_SIZE = 4
 GRID_SPACING_MILES = 1.5
 SEARCH_RADIUS_METERS = 1800
 
+AUTO_SHUTDOWN_ENABLED = getattr(sys, "frozen", False)
+HEARTBEAT_TIMEOUT_SECONDS = 10
+
+_last_heartbeat = time.time()
+_heartbeat_lock = threading.Lock()
+
+
+def _watch_for_disconnect():
+    """
+    Runs forever in a background thread. Every second, checks how long
+    it's been since the browser last pinged us. If that gap grows past
+    HEARTBEAT_TIMEOUT_SECONDS, we assume the tab was closed and exit the
+    whole process — this is what actually makes the app stop running in
+    the background after the user closes the window.
+    """
+    while True:
+        time.sleep(1)
+        with _heartbeat_lock:
+            elapsed = time.time() - _last_heartbeat
+        if elapsed > HEARTBEAT_TIMEOUT_SECONDS:
+            os._exit(0)
+
 CATEGORY_FILTERS = {
     "no_website": lambda place: "websiteUri" not in place,
     "no_photos": lambda place: not place.get("photos"),
@@ -60,6 +83,21 @@ def _place_to_result(place):
 @app.route("/")
 def home():
     return render_template("index.html")
+
+
+@app.route("/api/heartbeat", methods=["POST"])
+def heartbeat():
+    global _last_heartbeat
+    with _heartbeat_lock:
+        _last_heartbeat = time.time()
+    return "", 204
+
+
+@app.route("/api/shutdown", methods=["POST"])
+def shutdown():
+    if AUTO_SHUTDOWN_ENABLED:
+        os._exit(0)
+    return "", 204
 
 
 @app.route("/api/settings", methods=["GET"])
@@ -172,6 +210,8 @@ def _open_browser():
 
 if __name__ == "__main__":
     if getattr(sys, "frozen", False):
+        threading.Thread(target=_watch_for_disconnect, daemon=True).start()
+
         threading.Timer(1.0, _open_browser).start()
         app.run(debug=False, port=5001, use_reloader=False)
     else:

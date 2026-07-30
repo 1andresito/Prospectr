@@ -477,3 +477,11 @@ document.getElementById("types-clear-btn").addEventListener("click", () => {
 
 
 checkApiKeyStatus();
+
+setInterval(() => {
+    fetch("/api/heartbeat", { method: "POST" }).catch(() => {});
+}, 3000);
+
+window.addEventListener("beforeunload", () => {
+    navigator.sendBeacon("/api/shutdown");
+});
