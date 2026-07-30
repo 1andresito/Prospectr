@@ -23,6 +23,13 @@ GRID_SIZE = 4
 GRID_SPACING_MILES = 1.5
 SEARCH_RADIUS_METERS = 1800
 
+CATEGORY_FILTERS = {
+    "no_website": lambda place: "websiteUri" not in place,
+    "no_photos": lambda place: not place.get("photos"),
+    "no_reviews": lambda place: not place.get("userRatingCount"),
+    "no_phone": lambda place: "nationalPhoneNumber" not in place,
+}
+
 
 def _place_to_result(place):
     return {
@@ -63,11 +70,18 @@ def update_settings():
 
 @app.route("/api/search")
 def search_businesses():
-    query = request.args.get("query")
+    query = request.args.get("query") or None
     location = request.args.get("location")
+    category = request.args.get("category", "no_website")
+    types_param = request.args.get("types", "")
+    included_types = [t.strip() for t in types_param.split(",") if t.strip()] or None
 
-    if not query or not location:
-        return jsonify({"error": "Missing 'query' or 'location' parameter"}), 400
+    if not location:
+        return jsonify({"error": "Missing 'location' parameter"}), 400
+
+    filter_fn = CATEGORY_FILTERS.get(category)
+    if filter_fn is None:
+        return jsonify({"error": f"Unknown category: {category}"}), 400
 
     if not os.getenv("GOOGLE_PLACES_API_KEY"):
         return jsonify({"error": "No API key set. Add your Google Places API key in Settings first."}), 400
@@ -83,18 +97,18 @@ def search_businesses():
 
     all_places_by_id = {}
     for lat, lng in grid_points:
-        for place in search_grid_cell(query, lat, lng, SEARCH_RADIUS_METERS):
+        for place in search_grid_cell(query, lat, lng, SEARCH_RADIUS_METERS, included_types):
             place_id = place.get("id")
             if place_id:
                 all_places_by_id[place_id] = place
 
-    no_website_places = [
+    matching_places = [
         _place_to_result(place)
         for place in all_places_by_id.values()
-        if "websiteUri" not in place
+        if filter_fn(place)
     ]
 
-    return jsonify(no_website_places)
+    return jsonify(matching_places)
 
 
 @app.route("/api/analyze", methods=["POST"])

@@ -29,8 +29,8 @@ async function searchBusinesses() {
     const query = document.getElementById("query-input").value;
     const location = document.getElementById("location-input").value;
 
-    if (!query || !location) {
-        alert("Please enter both a business type and a location.");
+    if (!location) {
+        alert("Please enter a location.");
         return;
     }
 
@@ -44,7 +44,8 @@ async function searchBusinesses() {
             return;
         }
 
-        const url = `/api/search?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}`;
+        const typesParam = selectedTypes.join(",");
+        const url = `/api/search?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}&category=${encodeURIComponent(selectedCategory)}&types=${encodeURIComponent(typesParam)}`;
 
         const response = await fetch(url);
         const businesses = await response.json();
@@ -57,7 +58,8 @@ async function searchBusinesses() {
         clearMarkers();
 
         if (businesses.length === 0) {
-            alert("No businesses without a website were found for that search.");
+            const catLabel = CATEGORIES.find((c) => c.value === selectedCategory)?.label ?? selectedCategory;
+            alert(`No businesses matching "${catLabel}" were found for that search.`);
             return;
         }
 
@@ -249,5 +251,104 @@ async function checkApiKeyStatus() {
     document.getElementById("api-key-warning").classList.toggle("hidden", isReady);
     return isReady;
 }
+
+const CATEGORIES = [
+    { value: "no_website", label: "No Website" },
+    { value: "no_photos", label: "No Photos" },
+    { value: "no_reviews", label: "No Reviews" },
+    { value: "no_phone", label: "No Phone Number" },
+];
+
+let selectedCategory = "no_website";
+
+const categoryOverlay = document.getElementById("category-overlay");
+const categoryList = document.getElementById("category-list");
+const categoryBtn = document.getElementById("category-btn");
+
+function renderCategoryList() {
+    categoryList.innerHTML = "";
+    CATEGORIES.forEach((cat) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "category-option" + (cat.value === selectedCategory ? " selected" : "");
+        btn.textContent = cat.label;
+        btn.addEventListener("click", () => {
+            selectedCategory = cat.value;
+            categoryBtn.textContent = `Category: ${cat.label} ▾`;
+            closeCategoryOverlay();
+        });
+        categoryList.appendChild(btn);
+    });
+}
+
+function openCategoryOverlay() {
+    renderCategoryList();
+    categoryOverlay.classList.remove("hidden");
+}
+
+function closeCategoryOverlay() {
+    categoryOverlay.classList.add("hidden");
+}
+
+categoryBtn.addEventListener("click", openCategoryOverlay);
+document.getElementById("category-close-btn").addEventListener("click", closeCategoryOverlay);
+
+const PLACE_TYPES = [
+    { value: "restaurant", label: "Restaurants" },
+    { value: "cafe", label: "Cafes" },
+    { value: "bar", label: "Bars" },
+    { value: "store", label: "Retail Stores" },
+    { value: "hair_salon", label: "Hair Salons" },
+    { value: "gym", label: "Gyms" },
+    { value: "dentist", label: "Dentists" },
+    { value: "lawyer", label: "Lawyers" },
+    { value: "real_estate_agency", label: "Real Estate" },
+    { value: "car_repair", label: "Auto Repair" },
+];
+
+let selectedTypes = [];
+
+const typesOverlay = document.getElementById("types-overlay");
+const typesList = document.getElementById("types-list");
+const typesBtn = document.getElementById("types-btn");
+
+function renderTypesList() {
+    typesList.innerHTML = "";
+    PLACE_TYPES.forEach((t) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "category-option" + (selectedTypes.includes(t.value) ? " selected" : "");
+        btn.textContent = t.label;
+        btn.addEventListener("click", () => {
+            if (selectedTypes.includes(t.value)) {
+                selectedTypes = selectedTypes.filter((v) => v !== t.value);
+            } else {
+                selectedTypes.push(t.value);
+            }
+            renderTypesList();
+            updateTypesBtnLabel();
+        });
+        typesList.appendChild(btn);
+    });
+}
+
+function updateTypesBtnLabel() {
+    typesBtn.textContent = selectedTypes.length === 0
+        ? "Types: All ▾"
+        : `Types: ${selectedTypes.length} selected ▾`;
+}
+
+typesBtn.addEventListener("click", () => {
+    renderTypesList();
+    typesOverlay.classList.remove("hidden");
+});
+document.getElementById("types-close-btn").addEventListener("click", () => {
+    typesOverlay.classList.add("hidden");
+});
+document.getElementById("types-clear-btn").addEventListener("click", () => {
+    selectedTypes = [];
+    updateTypesBtnLabel();
+    typesOverlay.classList.add("hidden");
+});
 
 checkApiKeyStatus();

@@ -11,8 +11,10 @@
 <body>
 
     <div id="search-bar">
-        <input id="query-input" type="text" placeholder="e.g. restaurants" />
+        <input id="query-input" type="text" placeholder="e.g. restaurants (optional)" />
         <input id="location-input" type="text" placeholder="e.g. Madison, WI" />
+        <button id="category-btn">Category: No Website ▾</button>
+        <button id="types-btn">Types: All ▾</button>
         <button id="search-btn">Search</button>
         <button id="settings-btn" title="Settings" aria-label="Settings">⚙️</button>
     </div>
@@ -29,6 +31,27 @@
             <div class="loading-spinner" aria-hidden="true"></div>
             <p class="loading-text">Searching businesses</p>
             <p class="loading-subtext">This may take a moment</p>
+        </div>
+    </div>
+
+    <div id="category-overlay" class="hidden">
+        <div class="category-panel" role="dialog" aria-label="Choose category">
+            <div class="category-header">
+                <h2>Find businesses missing...</h2>
+                <button id="category-close-btn" aria-label="Close">&times;</button>
+            </div>
+            <div id="category-list"><!-- filled in by script.js --></div>
+        </div>
+    </div>
+
+    <div id="types-overlay" class="hidden">
+        <div class="category-panel" role="dialog" aria-label="Choose business types">
+            <div class="category-header">
+                <h2>Limit to specific types</h2>
+                <button id="types-close-btn" aria-label="Close">&times;</button>
+            </div>
+            <div id="types-list"><!-- filled in by script.js --></div>
+            <button id="types-clear-btn" class="category-option">Clear (search all types)</button>
         </div>
     </div>
 

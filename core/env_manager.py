@@ -1,7 +1,4 @@
 # env_manager.py
-# This is the single place that knows about every API key your app
-# needs. To add a future key (e.g. a different service later), just
-# add one entry here — no other code needs to change.
 ENV_KEYS = [
     {"name": "GOOGLE_PLACES_API_KEY", "label": "Google Places API Key"},
     {"name": "NVIDIA_API_KEY", "label": "NVIDIA API Key (for AI Analysis)"},
@@ -21,7 +18,6 @@ def _parse_env_file(path):
 
     for line in path.read_text().splitlines():
         line = line.strip()
-        # Skip blank lines and comments; skip malformed lines with no '='.
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, _, value = line.partition("=")

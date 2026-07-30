@@ -55,9 +55,7 @@ def generate_grid(center_lat, center_lng, grid_size=4, spacing_miles=1.5):
     return points
 
 
-def search_grid_cell(query, lat, lng, radius_meters):
-    """Search one grid cell via Google Places Text Search. Returns raw place dicts."""
-    url = "https://places.googleapis.com/v1/places:searchText"
+def search_grid_cell(query, lat, lng, radius_meters, included_types=None):
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": _api_key(),
@@ -66,19 +64,39 @@ def search_grid_cell(query, lat, lng, radius_meters):
             "places.displayName,"
             "places.formattedAddress,"
             "places.location,"
-            "places.websiteUri"
+            "places.websiteUri,"
+            "places.photos,"
+            "places.userRatingCount,"
+            "places.nationalPhoneNumber"
         ),
     }
 
-    body = {
-        "textQuery": query,
-        "locationBias": {
-            "circle": {
-                "center": {"latitude": lat, "longitude": lng},
-                "radius": radius_meters,
-            }
-        },
-    }
+    if query:
+        url = "https://places.googleapis.com/v1/places:searchText"
+        body = {
+            "textQuery": query,
+            "locationBias": {
+                "circle": {
+                    "center": {"latitude": lat, "longitude": lng},
+                    "radius": radius_meters,
+                }
+            },
+        }
+        if included_types:
+            body["includedType"] = included_types[0]  # Text Search only accepts one type
+    else:
+        url = "https://places.googleapis.com/v1/places:searchNearby"
+        body = {
+            "locationRestriction": {
+                "circle": {
+                    "center": {"latitude": lat, "longitude": lng},
+                    "radius": radius_meters,
+                }
+            },
+            "maxResultCount": 20,
+        }
+        if included_types:
+            body["includedTypes"] = included_types  # Nearby Search accepts multiple
 
     response = requests.post(url, headers=headers, json=body, timeout=30)
     if response.status_code != 200:
