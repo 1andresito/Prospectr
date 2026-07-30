@@ -34,6 +34,11 @@ async function searchBusinesses() {
         return;
     }
 
+    if (selectedCategories.length === 0) {
+        alert("Please select at least one category.");
+        return;
+    }
+
     setLoading(true);
 
     try {
@@ -44,8 +49,9 @@ async function searchBusinesses() {
             return;
         }
 
+        const categoryParam = selectedCategories.join(",");
         const typesParam = selectedTypes.join(",");
-        const url = `/api/search?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}&category=${encodeURIComponent(selectedCategory)}&types=${encodeURIComponent(typesParam)}`;
+        const url = `/api/search?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}&category=${encodeURIComponent(categoryParam)}&types=${encodeURIComponent(typesParam)}`;
 
         const response = await fetch(url);
         const businesses = await response.json();
@@ -58,65 +64,24 @@ async function searchBusinesses() {
         clearMarkers();
 
         if (businesses.length === 0) {
-            const catLabel = CATEGORIES.find((c) => c.value === selectedCategory)?.label ?? selectedCategory;
-            alert(`No businesses matching "${catLabel}" were found for that search.`);
+            const labels = selectedCategories.map((v) => CATEGORIES.find((c) => c.value === v)?.label ?? v);
+            alert(`No businesses matching "${labels.join(", ")}" were found for that search.`);
             return;
         }
 
-        // Loop through each business Flask sent back and drop a pin.
         businesses.forEach((biz) => {
             if (biz.lat == null || biz.lng == null) return;
 
             const marker = L.marker([biz.lat, biz.lng]).addTo(map);
 
-            const safeName = escapeHtml(biz.name);
-            const safeAddress = escapeHtml(biz.address);
-
             const popupHtml = `
-                <div class="popup-content">
-                    <strong>${safeName}</strong><br>
-                    ${safeAddress}<br>
-                    <button class="analyze-btn">Analyze Marketing Strategies</button>
+                <div class="pin-popup">
+                    <strong>${escapeHtml(biz.name)}</strong>
+                    ${escapeHtml(biz.address)}
                 </div>
             `;
-
-            marker.bindPopup(popupHtml, { maxWidth: 280 });
-
-            marker.on("popupopen", () => {
-                const popupEl = marker.getPopup().getElement();
-                const oldBtn = popupEl.querySelector(".analyze-btn");
-            
-                const analyzeBtn = oldBtn.cloneNode(true);
-                oldBtn.replaceWith(analyzeBtn);
-            
-                analyzeBtn.addEventListener("click", async () => {
-                    analyzeBtn.disabled = true;
-                    analyzeBtn.textContent = "Analyzing...";
-            
-                    marker.closePopup();
-                    openAnalysisPanel(biz.name);
-            
-                    try {
-                        const response = await fetch("/api/analyze", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ name: biz.name, address: biz.address }),
-                        });
-                        const result = await response.json();
-            
-                        if (result.error) {
-                            showAnalysisError(result.error);
-                        } else {
-                            showAnalysisResult(result.analysis);
-                        }
-                    } catch (err) {
-                        showAnalysisError("Something went wrong. Please try again.");
-                    } finally {
-                        analyzeBtn.disabled = false;
-                        analyzeBtn.textContent = "Analyze Marketing Strategies";
-                    }
-                });
-            });
+            marker.bindPopup(popupHtml, { maxWidth: 220 });
+            marker.on("click", () => openBusinessPanel(biz));
 
             currentMarkers.push(marker);
         });
@@ -218,10 +183,82 @@ document.getElementById("warning-settings-link").addEventListener("click", openS
 const analysisPanel = document.getElementById("analysis-panel");
 const analysisContent = document.getElementById("analysis-content");
 const analysisTitle = document.getElementById("analysis-panel-title");
+const analysisAddress = document.getElementById("analysis-address");
+const analyzeBtn = document.getElementById("analyze-btn");
+const downloadPdfBtn = document.getElementById("download-pdf-btn");
+const businessPhoto = document.getElementById("business-photo");
+const businessPhotoPlaceholder = document.getElementById("business-photo-placeholder");
+const businessRating = document.getElementById("business-rating");
+const businessPhone = document.getElementById("business-phone");
+const businessBadges = document.getElementById("business-badges");
 
-function openAnalysisPanel(businessName) {
-    analysisTitle.textContent = businessName;
-    analysisContent.innerHTML = '<p class="analysis-loading">Generating marketing suggestions...</p>';
+let currentBusiness = null;
+let lastAnalysisMarkdown = null;
+
+function setDownloadButtonVisible(visible) {
+    downloadPdfBtn.classList.toggle("hidden", !visible);
+}
+
+function renderBusinessMeta(biz) {
+    if (biz.rating) {
+        const count = biz.rating_count ? ` (${biz.rating_count})` : "";
+        businessRating.textContent = `⭐ ${biz.rating.toFixed(1)}${count}`;
+        businessRating.classList.remove("hidden");
+    } else {
+        businessRating.classList.add("hidden");
+    }
+
+    if (biz.phone) {
+        businessPhone.textContent = `📞 ${biz.phone}`;
+        businessPhone.classList.remove("hidden");
+    } else {
+        businessPhone.classList.add("hidden");
+    }
+
+    businessBadges.innerHTML = "";
+    const missing = [];
+    if (!biz.has_website) missing.push("No Website");
+    if (!biz.photo_name) missing.push("No Photos");
+    if (!biz.rating_count) missing.push("No Reviews");
+    if (!biz.phone) missing.push("No Phone");
+
+    missing.forEach((label) => {
+        const badge = document.createElement("span");
+        badge.className = "missing-badge";
+        badge.textContent = label;
+        businessBadges.appendChild(badge);
+    });
+}
+
+function renderBusinessPhoto(biz) {
+    if (biz.photo_name) {
+        businessPhoto.src = `/api/photo?name=${encodeURIComponent(biz.photo_name)}`;
+        businessPhoto.classList.remove("hidden");
+        businessPhotoPlaceholder.classList.add("hidden");
+        businessPhoto.onerror = () => {
+            businessPhoto.classList.add("hidden");
+            businessPhotoPlaceholder.classList.remove("hidden");
+        };
+    } else {
+        businessPhoto.classList.add("hidden");
+        businessPhotoPlaceholder.classList.remove("hidden");
+    }
+}
+
+function openBusinessPanel(biz) {
+    currentBusiness = biz;
+    lastAnalysisMarkdown = null;
+
+    analysisTitle.textContent = biz.name;
+    analysisAddress.textContent = biz.address;
+    analysisContent.innerHTML = "";
+    setDownloadButtonVisible(false);
+    analyzeBtn.disabled = false;
+    analyzeBtn.textContent = "Analyze Marketing Strategies";
+
+    renderBusinessMeta(biz);
+    renderBusinessPhoto(biz);
+
     analysisPanel.classList.remove("hidden");
 }
 
@@ -230,16 +267,92 @@ function closeAnalysisPanel() {
 }
 
 function showAnalysisResult(markdownText) {
+    lastAnalysisMarkdown = markdownText;
     const rawHtml = marked.parse(markdownText);
     const safeHtml = DOMPurify.sanitize(rawHtml);
     analysisContent.innerHTML = safeHtml;
+    setDownloadButtonVisible(true);
 }
 
 function showAnalysisError(message) {
     analysisContent.innerHTML = `<p class="analysis-loading">Error: ${escapeHtml(message)}</p>`;
+    setDownloadButtonVisible(false);
 }
 
 document.getElementById("analysis-close-btn").addEventListener("click", closeAnalysisPanel);
+
+analyzeBtn.addEventListener("click", async () => {
+    if (!currentBusiness) return;
+
+    analyzeBtn.disabled = true;
+    analyzeBtn.textContent = "Analyzing...";
+    analysisContent.innerHTML = '<p class="analysis-loading">Generating marketing suggestions...</p>';
+    setDownloadButtonVisible(false);
+
+    try {
+        const response = await fetch("/api/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: currentBusiness.name, address: currentBusiness.address }),
+        });
+        const result = await response.json();
+
+        if (result.error) {
+            showAnalysisError(result.error);
+        } else {
+            showAnalysisResult(result.analysis);
+        }
+    } catch (err) {
+        showAnalysisError("Something went wrong. Please try again.");
+    } finally {
+        analyzeBtn.disabled = false;
+        analyzeBtn.textContent = "Analyze Marketing Strategies";
+    }
+});
+
+
+downloadPdfBtn.addEventListener("click", () => {
+    if (!lastAnalysisMarkdown || !currentBusiness) return;
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: "pt", format: "letter" });
+
+    const marginLeft = 48;
+    const maxWidth = 515;
+    let y = 60;
+
+    doc.setFontSize(16);
+    doc.text(currentBusiness.name, marginLeft, y);
+    y += 22;
+
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(currentBusiness.address, marginLeft, y);
+    y += 28;
+
+    doc.setTextColor(0);
+    doc.setFontSize(11);
+
+    const plainText = lastAnalysisMarkdown
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/^#+\s*/gm, "")
+        .replace(/^[-*]\s+/gm, "\u2022 ");
+
+    const lines = doc.splitTextToSize(plainText, maxWidth);
+
+    lines.forEach((line) => {
+        if (y > 740) {
+            doc.addPage();
+            y = 60;
+        }
+        doc.text(line, marginLeft, y);
+        y += 16;
+    });
+
+    const safeName = currentBusiness.name.replace(/[^a-z0-9]+/gi, "_");
+    doc.save(`${safeName}_marketing_analysis.pdf`);
+});
+
 
 async function checkApiKeyStatus() {
     const response = await fetch("/api/settings");
@@ -252,6 +365,7 @@ async function checkApiKeyStatus() {
     return isReady;
 }
 
+
 const CATEGORIES = [
     { value: "no_website", label: "No Website" },
     { value: "no_photos", label: "No Photos" },
@@ -259,7 +373,7 @@ const CATEGORIES = [
     { value: "no_phone", label: "No Phone Number" },
 ];
 
-let selectedCategory = "no_website";
+let selectedCategories = ["no_website"];
 
 const categoryOverlay = document.getElementById("category-overlay");
 const categoryList = document.getElementById("category-list");
@@ -270,15 +384,25 @@ function renderCategoryList() {
     CATEGORIES.forEach((cat) => {
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "category-option" + (cat.value === selectedCategory ? " selected" : "");
+        btn.className = "category-option" + (selectedCategories.includes(cat.value) ? " selected" : "");
         btn.textContent = cat.label;
         btn.addEventListener("click", () => {
-            selectedCategory = cat.value;
-            categoryBtn.textContent = `Category: ${cat.label} ▾`;
-            closeCategoryOverlay();
+            if (selectedCategories.includes(cat.value)) {
+                selectedCategories = selectedCategories.filter((v) => v !== cat.value);
+            } else {
+                selectedCategories.push(cat.value);
+            }
+            renderCategoryList();
+            updateCategoryBtnLabel();
         });
         categoryList.appendChild(btn);
     });
+}
+
+function updateCategoryBtnLabel() {
+    categoryBtn.textContent = selectedCategories.length === 1
+        ? `Category: ${CATEGORIES.find((c) => c.value === selectedCategories[0]).label} ▾`
+        : `Category: ${selectedCategories.length} selected ▾`;
 }
 
 function openCategoryOverlay() {
@@ -350,5 +474,6 @@ document.getElementById("types-clear-btn").addEventListener("click", () => {
     updateTypesBtnLabel();
     typesOverlay.classList.add("hidden");
 });
+
 
 checkApiKeyStatus();

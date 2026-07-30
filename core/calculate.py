@@ -1,4 +1,3 @@
-#calculate.py
 import math
 import os
 
@@ -66,6 +65,7 @@ def search_grid_cell(query, lat, lng, radius_meters, included_types=None):
             "places.location,"
             "places.websiteUri,"
             "places.photos,"
+            "places.rating,"
             "places.userRatingCount,"
             "places.nationalPhoneNumber"
         ),
@@ -83,7 +83,7 @@ def search_grid_cell(query, lat, lng, radius_meters, included_types=None):
             },
         }
         if included_types:
-            body["includedType"] = included_types[0]  # Text Search only accepts one type
+            body["includedType"] = included_types[0]
     else:
         url = "https://places.googleapis.com/v1/places:searchNearby"
         body = {
@@ -96,10 +96,35 @@ def search_grid_cell(query, lat, lng, radius_meters, included_types=None):
             "maxResultCount": 20,
         }
         if included_types:
-            body["includedTypes"] = included_types  # Nearby Search accepts multiple
+            body["includedTypes"] = included_types
 
     response = requests.post(url, headers=headers, json=body, timeout=30)
     if response.status_code != 200:
         return []
 
     return response.json().get("places", [])
+
+
+def get_photo_uri(photo_name, max_width=600):
+    """
+    Given a Places photo resource name (e.g. 'places/ABC123/photos/XYZ'),
+    exchanges it for a direct, signed googleusercontent.com image URL.
+    Using skipHttpRedirect keeps our API key entirely server-side — the
+    browser only ever receives the returned URL, never the key itself.
+    Returns None if the photo can't be resolved.
+    """
+    if not photo_name:
+        return None
+
+    url = f"https://places.googleapis.com/v1/{photo_name}/media"
+    params = {
+        "key": _api_key(),
+        "maxWidthPx": max_width,
+        "skipHttpRedirect": "true",
+    }
+
+    response = requests.get(url, params=params, timeout=15)
+    if response.status_code != 200:
+        return None
+
+    return response.json().get("photoUri")

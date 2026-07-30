@@ -1,10 +1,9 @@
-#app.py
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request
 
-from calculate import geocode_location, generate_grid, search_grid_cell
+from calculate import geocode_location, generate_grid, get_photo_uri, search_grid_cell
 from env_manager import ENV_KEYS, get_key_status, save_keys
 from analysis import generate_marketing_analysis
 import os
@@ -32,11 +31,20 @@ CATEGORY_FILTERS = {
 
 
 def _place_to_result(place):
+
+    photos = place.get("photos") or []
+    photo_name = photos[0].get("name") if photos else None
+
     return {
         "name": place.get("displayName", {}).get("text", "Unknown"),
         "address": place.get("formattedAddress", "No address"),
         "lat": place.get("location", {}).get("latitude"),
         "lng": place.get("location", {}).get("longitude"),
+        "rating": place.get("rating"),
+        "rating_count": place.get("userRatingCount"),
+        "phone": place.get("nationalPhoneNumber"),
+        "has_website": "websiteUri" in place,
+        "photo_name": photo_name,
     }
 
 
@@ -72,16 +80,17 @@ def update_settings():
 def search_businesses():
     query = request.args.get("query") or None
     location = request.args.get("location")
-    category = request.args.get("category", "no_website")
+    category_param = request.args.get("category", "no_website")
+    categories = [c.strip() for c in category_param.split(",") if c.strip()] or ["no_website"]
     types_param = request.args.get("types", "")
     included_types = [t.strip() for t in types_param.split(",") if t.strip()] or None
 
     if not location:
         return jsonify({"error": "Missing 'location' parameter"}), 400
 
-    filter_fn = CATEGORY_FILTERS.get(category)
-    if filter_fn is None:
-        return jsonify({"error": f"Unknown category: {category}"}), 400
+    filter_fns = [CATEGORY_FILTERS[c] for c in categories if c in CATEGORY_FILTERS]
+    if not filter_fns:
+        return jsonify({"error": f"Unknown category: {category_param}"}), 400
 
     if not os.getenv("GOOGLE_PLACES_API_KEY"):
         return jsonify({"error": "No API key set. Add your Google Places API key in Settings first."}), 400
@@ -105,10 +114,27 @@ def search_businesses():
     matching_places = [
         _place_to_result(place)
         for place in all_places_by_id.values()
-        if filter_fn(place)
+        if any(fn(place) for fn in filter_fns)
     ]
 
     return jsonify(matching_places)
+
+
+@app.route("/api/photo")
+def get_photo():
+
+    photo_name = request.args.get("name")
+    if not photo_name:
+        return jsonify({"error": "Missing 'name' parameter"}), 400
+
+    if not os.getenv("GOOGLE_PLACES_API_KEY"):
+        return jsonify({"error": "No API key set"}), 400
+
+    photo_uri = get_photo_uri(photo_name)
+    if photo_uri is None:
+        return jsonify({"error": "Photo not found"}), 404
+
+    return redirect(photo_uri)
 
 
 @app.route("/api/analyze", methods=["POST"])

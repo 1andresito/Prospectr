@@ -67,14 +67,35 @@
         </div>
     </div>
 
-    <div id="analysis-panel" class="hidden" role="complementary" aria-label="Marketing analysis">
-        <div class="analysis-panel-header">
-            <h2 id="analysis-panel-title">Marketing Analysis</h2>
-            <button id="analysis-close-btn" aria-label="Close">&times;</button>
+
+    <div id="analysis-panel" class="hidden" role="complementary" aria-label="Business details">
+        <button id="analysis-close-btn" class="panel-close-btn" aria-label="Close">&times;</button>
+
+        <div id="panel-scroll">
+            <div id="business-photo-wrap">
+                <img id="business-photo" class="hidden" alt="" />
+                <div id="business-photo-placeholder">🏢</div>
+            </div>
+
+            <div class="panel-info">
+                <h2 id="analysis-panel-title">Business Name</h2>
+                <p id="analysis-address" class="business-address"></p>
+
+                <div id="business-meta">
+                    <span id="business-rating" class="meta-pill hidden"></span>
+                    <span id="business-phone" class="meta-pill hidden"></span>
+                </div>
+
+                <div id="business-badges"><!-- filled in by script.js --></div>
+
+                <button id="analyze-btn" class="analyze-btn">Analyze Marketing Strategies</button>
+                <div id="analysis-content"></div>
+                <button id="download-pdf-btn" class="hidden">Download as PDF</button>
+            </div>
         </div>
-        <div id="analysis-content"></div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.5/purify.min.js"></script>
 
