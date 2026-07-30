@@ -1,8 +1,18 @@
 # Virtual Environment
 .venv/
+build-env/
 
 #Environment Variables
 .env
 
 #Python Cache
 __pycache__/
+
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
+
+# OS clutter
+.DS_Store
+Thumbs.db

@@ -1,3 +1,6 @@
+import sys
+import threading
+import webbrowser
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -8,14 +11,20 @@ from env_manager import ENV_KEYS, get_key_status, save_keys
 from analysis import generate_marketing_analysis
 import os
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-ENV_PATH = BASE_DIR / ".env"
+if getattr(sys, "frozen", False):
+    RESOURCE_DIR = Path(sys._MEIPASS)
+    DATA_DIR = Path(sys.executable).resolve().parent
+else:
+    RESOURCE_DIR = Path(__file__).resolve().parent.parent
+    DATA_DIR = RESOURCE_DIR
+
+ENV_PATH = DATA_DIR / ".env"
 load_dotenv(ENV_PATH)
 
 app = Flask(
     __name__,
-    template_folder=str(BASE_DIR / "templates"),
-    static_folder=str(BASE_DIR / "static"),
+    template_folder=str(RESOURCE_DIR / "templates"),
+    static_folder=str(RESOURCE_DIR / "static"),
 )
 
 GRID_SIZE = 4
@@ -157,5 +166,13 @@ def analyze_business():
     return jsonify({"analysis": analysis})
 
 
+def _open_browser():
+    webbrowser.open("http://127.0.0.1:5001")
+
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    if getattr(sys, "frozen", False):
+        threading.Timer(1.0, _open_browser).start()
+        app.run(debug=False, port=5001, use_reloader=False)
+    else:
+        app.run(debug=True, port=5001)

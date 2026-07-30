@@ -1,0 +1,51 @@
+name: Build Prospectr Executables
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            data_sep: ";"
+            artifact_name: Prospectr-Windows
+            build_path: dist/Prospectr.exe
+          - os: macos-latest
+            data_sep: ":"
+            artifact_name: Prospectr-Mac
+            build_path: dist/Prospectr
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build executable
+        working-directory: core
+        run: >
+          pyinstaller --onefile --windowed --name Prospectr
+          --add-data "../templates${{ matrix.data_sep }}templates"
+          --add-data "../static${{ matrix.data_sep }}static"
+          app.py
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: core/${{ matrix.build_path }}
