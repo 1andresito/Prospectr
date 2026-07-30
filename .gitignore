@@ -16,3 +16,7 @@ dist/
 # OS clutter
 .DS_Store
 Thumbs.db
+
+# Icons Files
+.ico
+.icns

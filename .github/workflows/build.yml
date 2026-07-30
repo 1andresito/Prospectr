@@ -15,10 +15,12 @@ jobs:
             data_sep: ";"
             artifact_name: Prospectr-Windows
             build_path: dist/Prospectr.exe
+            icon_file: icon.ico
           - os: macos-latest
             data_sep: ":"
             artifact_name: Prospectr-Mac
             build_path: dist/Prospectr
+            icon_file: icon.icns
 
     runs-on: ${{ matrix.os }}
 
@@ -34,12 +36,34 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pyinstaller
+          pip install pyinstaller pillow
+
+      - name: Build Windows icon
+        if: matrix.os == 'windows-latest'
+        run: |
+          python -c "from PIL import Image; img = Image.open('assets/icon.png'); img.save('assets/icon.ico', sizes=[(16,16),(32,32),(48,48),(256,256)])"
+
+      - name: Build Mac icon
+        if: matrix.os == 'macos-latest'
+        run: |
+          mkdir icon.iconset
+          sips -z 16 16     assets/icon.png --out icon.iconset/icon_16x16.png
+          sips -z 32 32     assets/icon.png --out icon.iconset/icon_16x16@2x.png
+          sips -z 32 32     assets/icon.png --out icon.iconset/icon_32x32.png
+          sips -z 64 64     assets/icon.png --out icon.iconset/icon_32x32@2x.png
+          sips -z 128 128   assets/icon.png --out icon.iconset/icon_128x128.png
+          sips -z 256 256   assets/icon.png --out icon.iconset/icon_128x128@2x.png
+          sips -z 256 256   assets/icon.png --out icon.iconset/icon_256x256.png
+          sips -z 512 512   assets/icon.png --out icon.iconset/icon_256x256@2x.png
+          sips -z 512 512   assets/icon.png --out icon.iconset/icon_512x512.png
+          cp assets/icon.png icon.iconset/icon_512x512@2x.png
+          iconutil -c icns icon.iconset -o assets/icon.icns
 
       - name: Build executable
         working-directory: core
         run: >
           pyinstaller --onefile --windowed --name Prospectr
+          --icon "../assets/${{ matrix.icon_file }}"
           --add-data "../templates${{ matrix.data_sep }}templates"
           --add-data "../static${{ matrix.data_sep }}static"
           app.py
