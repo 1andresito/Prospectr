@@ -22,9 +22,7 @@ Inside the website you are required to obtain a Places API Key from google cloud
 
 The settings can be found here
 
-<p align="center">
-  <img src="assets/demonstrationA.gif" width="400" alt="Settings Demo">
-</p>
+<img src="assets/demonstrationA.gif" width="700" alt="Settings Demo">
 
 ## For developers
 
