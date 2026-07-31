@@ -1,17 +1,21 @@
 # env_manager.py
 ENV_KEYS = [
     {"name": "GOOGLE_PLACES_API_KEY", "label": "Google Places API Key"},
-    {"name": "NVIDIA_API_KEY", "label": "NVIDIA API Key (for AI Analysis)"},
+    {"name": "AGENT_API_KEY", "label": "AI Agent API Key (Gemini / Claude / ChatGPT / NVIDIA)"},
 ]
+
+AI_PROVIDERS = [
+    {"value": "nvidia", "label": "NVIDIA"},
+    {"value": "gemini", "label": "Google Gemini"},
+    {"value": "claude", "label": "Anthropic Claude"},
+    {"value": "chatgpt", "label": "OpenAI ChatGPT"},
+]
+
+DEFAULT_PROVIDER = "nvidia"
 
 
 def _parse_env_file(path):
-    """
-    Reads a .env file into a plain dictionary, e.g.
-    {'GOOGLE_PLACES_API_KEY': 'abc123'}.
-    Returns an empty dict if the file doesn't exist yet — this is
-    what lets 'save' work whether or not .env has been created.
-    """
+    # ... unchanged, keep your existing version ...
     values = {}
     if not path.exists():
         return values
@@ -27,18 +31,13 @@ def _parse_env_file(path):
 
 
 def _write_env_file(path, values):
-    """Writes a dictionary back out as a .env file, one KEY=value per line."""
+    # ... unchanged ...
     lines = [f"{key}={value}" for key, value in values.items()]
     path.write_text("\n".join(lines) + "\n")
 
 
 def get_key_status(env_path):
-    """
-    Returns which known keys are currently set — WITHOUT exposing the
-    real values. Only a boolean and a masked preview (last 4 chars)
-    are returned, so the frontend can display status without ever
-    holding the actual secret.
-    """
+    # ... unchanged, keep your existing version ...
     current = _parse_env_file(env_path)
     status = []
 
@@ -62,12 +61,7 @@ def get_key_status(env_path):
 
 
 def save_keys(env_path, new_values):
-    """
-    Updates (or creates) the .env file with new key/value pairs,
-    preserving any existing keys not included in this particular save.
-    Empty/blank submitted values are ignored, so leaving a field blank
-    in the UI doesn't accidentally erase an already-saved key.
-    """
+    # ... unchanged ...
     current = _parse_env_file(env_path)
     for key, value in new_values.items():
         if value:
@@ -75,3 +69,21 @@ def save_keys(env_path, new_values):
 
     _write_env_file(env_path, current)
     return current
+
+
+def get_active_provider(env_path):
+    """Returns the currently selected provider name, e.g. 'nvidia'."""
+    current = _parse_env_file(env_path)
+    return current.get("AI_PROVIDER", DEFAULT_PROVIDER)
+
+
+def save_active_provider(env_path, provider_value):
+    """Persists which provider is active. Raises ValueError for an unknown provider."""
+    valid_values = {p["value"] for p in AI_PROVIDERS}
+    if provider_value not in valid_values:
+        raise ValueError(f"Unknown provider: {provider_value}")
+
+    current = _parse_env_file(env_path)
+    current["AI_PROVIDER"] = provider_value
+    _write_env_file(env_path, current)
+    return provider_value

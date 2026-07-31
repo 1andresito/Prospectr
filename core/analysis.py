@@ -1,25 +1,9 @@
 # analysis.py
-import os
+from providers.registry import call_provider, call_provider_streaming
 
-import requests
+def build_prompt(name, address):
 
-NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-
-NVIDIA_MODEL = "meta/llama-3.1-70b-instruct"
-
-
-def _api_key():
-    return os.getenv("NVIDIA_API_KEY")
-
-
-def generate_marketing_analysis(name, address):
-    """
-    Asks the AI model for marketing recommendations for a specific
-    local business that currently has no website.
-    Returns the analysis text, or None if the request failed.
-    """
-
-    prompt = f"""
+    return f"""
         You are an expert local business growth consultant, digital marketing strategist,
         website auditor, local SEO specialist, social media strategist, and automation consultant.
 
@@ -416,31 +400,11 @@ def generate_marketing_analysis(name, address):
         - Keep the report practical, organized, and focused on getting more customers.
         """
 
-    headers = {
-        "Authorization": f"Bearer {_api_key()}",
-        "Content-Type": "application/json",
-    }
+def generate_marketing_analysis(name, address, provider, api_key):
+    prompt = build_prompt(name, address)
+    return call_provider(provider, prompt, api_key)
 
-    body = {
-        "model": NVIDIA_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 400,
-        "temperature": 0.5,
-    }
 
-    try:
-        response = requests.post(NVIDIA_API_URL, headers=headers, json=body, timeout=90)
-    except requests.exceptions.RequestException as e:
-        print(f"NVIDIA request failed with an exception: {e}")
-        return None
-
-    if response.status_code != 200:
-        print(f"NVIDIA API returned status {response.status_code}: {response.text}")
-        return None
-
-    data = response.json()
-
-    try:
-        return data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError):
-        return None
+def generate_marketing_analysis_stream(name, address, provider, api_key):
+    prompt = build_prompt(name, address)
+    yield from call_provider_streaming(provider, prompt, api_key)

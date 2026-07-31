@@ -1,15 +1,17 @@
 import sys
 import threading
 import time
+import json
 import webbrowser
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, Response, stream_with_context
 
 from calculate import geocode_location, generate_grid, get_photo_uri, search_grid_cell
 from env_manager import ENV_KEYS, get_key_status, save_keys
-from analysis import generate_marketing_analysis
+from analysis import generate_marketing_analysis_stream
+from providers.registry import detect_provider
 import os
 
 if getattr(sys, "frozen", False):
@@ -116,7 +118,6 @@ def update_settings():
         return jsonify({"error": "No valid keys provided"}), 400
 
     updated = save_keys(ENV_PATH, new_values)
-
     for key, value in updated.items():
         os.environ[key] = value
 
@@ -184,24 +185,40 @@ def get_photo():
     return redirect(photo_uri)
 
 
-@app.route("/api/analyze", methods=["POST"])
-def analyze_business():
-    data = request.get_json(silent=True) or {}
-    name = data.get("name")
-    address = data.get("address")
+@app.route("/api/analyze/stream")
+def analyze_business_stream():
+    name = request.args.get("name")
+    address = request.args.get("address")
 
     if not name or not address:
         return jsonify({"error": "Missing business name or address"}), 400
 
-    if not os.getenv("NVIDIA_API_KEY"):
-        return jsonify({"error": "No NVIDIA API key set. Add one in Settings first."}), 400
+    agent_key = os.getenv("AGENT_API_KEY")
+    if not agent_key:
+        return jsonify({"error": "No Agent API key set. Add one in Settings first."}), 400
 
-    analysis = generate_marketing_analysis(name, address)
+    provider = detect_provider(agent_key)
+    if provider is None:
+        return jsonify({
+            "error": "Couldn't recognize this API key's provider. Double-check you pasted it correctly."
+        }), 400
 
-    if analysis is None:
-        return jsonify({"error": "Analysis request failed. Check your NVIDIA API key and try again."}), 502
+    def event_stream():
+        got_any_chunks = False
+        try:
+            for chunk in generate_marketing_analysis_stream(name, address, provider, agent_key):
+                got_any_chunks = True
+                yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            return
 
-    return jsonify({"analysis": analysis})
+        if got_any_chunks:
+            yield f"data: {json.dumps({'done': True})}\n\n"
+        else:
+            yield f"data: {json.dumps({'error': 'Analysis request failed. Check your API key and try again.'})}\n\n"
+
+    return Response(stream_with_context(event_stream()), mimetype="text/event-stream")
 
 
 def _open_browser():
@@ -211,8 +228,7 @@ def _open_browser():
 if __name__ == "__main__":
     if getattr(sys, "frozen", False):
         threading.Thread(target=_watch_for_disconnect, daemon=True).start()
-
         threading.Timer(1.0, _open_browser).start()
-        app.run(debug=False, port=5001, use_reloader=False)
+        app.run(debug=False, port=5001, use_reloader=False, threaded=True)
     else:
-        app.run(debug=True, port=5001)
+        app.run(debug=True, port=5001, threaded=True)

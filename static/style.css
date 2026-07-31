@@ -84,6 +84,12 @@ body {
     margin-bottom: 14px;
 }
 
+.settings-field select {
+    width: 100%;
+    padding: 8px;
+    box-sizing: border-box;
+}
+
 .settings-field label {
     display: block;
     font-size: 0.85rem;

@@ -281,7 +281,7 @@ function showAnalysisError(message) {
 
 document.getElementById("analysis-close-btn").addEventListener("click", closeAnalysisPanel);
 
-analyzeBtn.addEventListener("click", async () => {
+analyzeBtn.addEventListener("click", () => {
     if (!currentBusiness) return;
 
     analyzeBtn.disabled = true;
@@ -289,25 +289,51 @@ analyzeBtn.addEventListener("click", async () => {
     analysisContent.innerHTML = '<p class="analysis-loading">Generating marketing suggestions...</p>';
     setDownloadButtonVisible(false);
 
-    try {
-        const response = await fetch("/api/analyze", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: currentBusiness.name, address: currentBusiness.address }),
-        });
-        const result = await response.json();
+    let fullText = "";
+    let firstChunkReceived = false;
 
-        if (result.error) {
-            showAnalysisError(result.error);
-        } else {
-            showAnalysisResult(result.analysis);
+    const params = new URLSearchParams({
+        name: currentBusiness.name,
+        address: currentBusiness.address,
+    });
+    const eventSource = new EventSource(`/api/analyze/stream?${params.toString()}`);
+
+    eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.chunk) {
+            if (!firstChunkReceived) {
+                analysisContent.innerHTML = "";
+                firstChunkReceived = true;
+            }
+            fullText += data.chunk;
+            analysisContent.innerHTML = DOMPurify.sanitize(marked.parse(fullText));
         }
-    } catch (err) {
-        showAnalysisError("Something went wrong. Please try again.");
-    } finally {
+
+        if (data.done) {
+            lastAnalysisMarkdown = fullText;
+            setDownloadButtonVisible(true);
+            analyzeBtn.disabled = false;
+            analyzeBtn.textContent = "Analyze Marketing Strategies";
+            eventSource.close();
+        }
+
+        if (data.error) {
+            showAnalysisError(data.error);
+            analyzeBtn.disabled = false;
+            analyzeBtn.textContent = "Analyze Marketing Strategies";
+            eventSource.close();
+        }
+    };
+
+    eventSource.onerror = () => {
+        if (!firstChunkReceived) {
+            showAnalysisError("Connection lost. Please try again.");
+        }
         analyzeBtn.disabled = false;
         analyzeBtn.textContent = "Analyze Marketing Strategies";
-    }
+        eventSource.close();
+    };
 });
 
 
