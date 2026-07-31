@@ -25,8 +25,6 @@ jobs:
             icon_file: icon.icns
           - os: ubuntu-latest
             data_sep: ":"
-            artifact_name: Prospectr-Linux
-            build_path: dist/Prospectr
 
     runs-on: ${{ matrix.os }}
 
@@ -96,6 +94,7 @@ jobs:
           ARCH=x86_64 ./appimagetool.AppImage --appimage-extract-and-run AppDir Prospectr-x86_64.AppImage
 
       - name: Upload build artifact
+        if: matrix.os != 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
@@ -105,5 +104,5 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: Prospectr-Linux-AppImage
+          name: Prospectr-Linux
           path: core/Prospectr-x86_64.AppImage
