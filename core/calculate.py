@@ -79,7 +79,7 @@ _PLACES_FIELD_MASK = (
 )
 
 _MAX_TEXT_SEARCH_PAGES = 3
-_PAGE_TOKEN_RETRY_DELAYS = (2, 3)  # seconds; only used if a token isn't ready yet
+_PAGE_TOKEN_RETRY_DELAYS = (2, 3)
 
 
 def _search_text(query, lat, lng, radius_meters, headers, included_types=None):
