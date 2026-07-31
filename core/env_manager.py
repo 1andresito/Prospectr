@@ -15,7 +15,6 @@ DEFAULT_PROVIDER = "nvidia"
 
 
 def _parse_env_file(path):
-    # ... unchanged, keep your existing version ...
     values = {}
     if not path.exists():
         return values
@@ -31,13 +30,11 @@ def _parse_env_file(path):
 
 
 def _write_env_file(path, values):
-    # ... unchanged ...
     lines = [f"{key}={value}" for key, value in values.items()]
     path.write_text("\n".join(lines) + "\n")
 
 
 def get_key_status(env_path):
-    # ... unchanged, keep your existing version ...
     current = _parse_env_file(env_path)
     status = []
 
@@ -61,7 +58,6 @@ def get_key_status(env_path):
 
 
 def save_keys(env_path, new_values):
-    # ... unchanged ...
     current = _parse_env_file(env_path)
     for key, value in new_values.items():
         if value:
