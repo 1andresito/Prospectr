@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+    branches:
+      - "**"
   workflow_dispatch:
 
 jobs:
@@ -21,6 +23,10 @@ jobs:
             artifact_name: Prospectr-Mac
             build_path: dist/Prospectr
             icon_file: icon.icns
+          - os: ubuntu-latest
+            data_sep: ":"
+            artifact_name: Prospectr-Linux
+            build_path: dist/Prospectr
 
     runs-on: ${{ matrix.os }}
 
@@ -61,12 +67,13 @@ jobs:
 
       - name: Build executable
         working-directory: core
-        run: >
-          pyinstaller --onefile --windowed --name Prospectr
-          --icon "../assets/${{ matrix.icon_file }}"
-          --add-data "../templates${{ matrix.data_sep }}templates"
-          --add-data "../static${{ matrix.data_sep }}static"
-          app.py
+        shell: bash
+        run: |
+          ARGS="--onefile --name Prospectr --add-data ../templates${{ matrix.data_sep }}templates --add-data ../static${{ matrix.data_sep }}static"
+          if [ "${{ matrix.os }}" != "ubuntu-latest" ]; then
+            ARGS="$ARGS --windowed --icon ../assets/${{ matrix.icon_file }}"
+          fi
+          pyinstaller $ARGS app.py
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

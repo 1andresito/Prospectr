@@ -6,6 +6,7 @@ import webbrowser
 from pathlib import Path
 
 from dotenv import load_dotenv
+from platformdirs import user_config_dir
 from flask import Flask, jsonify, redirect, render_template, request, Response, stream_with_context
 
 from calculate import geocode_location, generate_grid, get_photo_uri, search_grid_cell
@@ -17,11 +18,20 @@ import os
 if getattr(sys, "frozen", False):
     RESOURCE_DIR = Path(sys._MEIPASS)
     DATA_DIR = Path(sys.executable).resolve().parent
+
+    CONFIG_DIR = Path(user_config_dir("Prospectr", appauthor=False))
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    ENV_PATH = CONFIG_DIR / ".env"
+
+    _legacy_env_path = DATA_DIR / ".env"
+    if _legacy_env_path.exists() and not ENV_PATH.exists():
+        ENV_PATH.write_text(_legacy_env_path.read_text())
+        _legacy_env_path.unlink()
 else:
     RESOURCE_DIR = Path(__file__).resolve().parent.parent
     DATA_DIR = RESOURCE_DIR
+    ENV_PATH = DATA_DIR / ".env"
 
-ENV_PATH = DATA_DIR / ".env"
 load_dotenv(ENV_PATH)
 
 app = Flask(

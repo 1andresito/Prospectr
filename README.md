@@ -12,9 +12,15 @@
 ## For Users (Where To Download)
 
 1. Go to the [Releases page](../../releases) of this repo.
-2. Download `Prospectr-Windows.zip` (Windows) or `Prospectr-Mac.zip` (Mac).
-3. Unzip it and double-click `Prospectr`.
-4. Your browser will open automatically to the app. Click the Settings button to paste in your Google Places and Supported AI API key. this only needs to be done once; the keys are saved next to the app.
+2. Download `Prospectr-Windows.zip` (Windows), `Prospectr-Mac.zip` (Mac), or `Prospectr-Linux.zip` (Linux).
+3. Unzip it.
+   - **Windows/Mac:** double-click `Prospectr`.
+   - **Linux:** open a terminal in the unzipped folder and run:
+```
+     chmod +x Prospectr
+     ./Prospectr
+```
+4. Your browser will open automatically to the app. Click the Settings button to paste in your Google Places and Supported AI API key. This only needs to be done once as your keys are saved in your OS's standard config folder (`~/.config/Prospectr/.env` on Linux, `~/Library/Application Support/Prospectr/.env` on Mac, `%LOCALAPPDATA%\Prospectr\.env` on Windows), not next to the app.
 
 ## Getting And Using Keys
 
