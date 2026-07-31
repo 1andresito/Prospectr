@@ -21,7 +21,7 @@
 
 ## Getting And Using Keys
 
-Inside the website you are required to obtain a Places(new) API Key from google cloud
+Inside the website you are required to obtain a Places(new) API Key from google cloud, and a AI API of the listed choices (optional)
 
 The settings can be found here
 
