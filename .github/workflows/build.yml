@@ -75,8 +75,35 @@ jobs:
           fi
           pyinstaller $ARGS app.py
 
+      - name: Package Linux AppImage
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: core
+        shell: bash
+        run: |
+          mkdir -p AppDir/usr/bin
+          cp dist/Prospectr AppDir/usr/bin/Prospectr
+          chmod +x AppDir/usr/bin/Prospectr
+
+          cp ../assets/icon.png AppDir/prospectr.png
+          cp ../packaging/linux/Prospectr.desktop AppDir/Prospectr.desktop
+          cp ../packaging/linux/AppRun AppDir/AppRun
+          chmod +x AppDir/AppRun
+
+          wget -q "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" -O appimagetool.AppImage
+          chmod +x appimagetool.AppImage
+
+          # --appimage-extract-and-run avoids needing FUSE on the CI runner
+          ARCH=x86_64 ./appimagetool.AppImage --appimage-extract-and-run AppDir Prospectr-x86_64.AppImage
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: core/${{ matrix.build_path }}
+
+      - name: Upload Linux AppImage artifact
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Prospectr-Linux-AppImage
+          path: core/Prospectr-x86_64.AppImage

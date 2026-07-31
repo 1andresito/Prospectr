@@ -295,6 +295,10 @@ analyzeBtn.addEventListener("click", () => {
     const params = new URLSearchParams({
         name: currentBusiness.name,
         address: currentBusiness.address,
+        has_website: String(Boolean(currentBusiness.has_website)),
+        has_photos: String(Boolean(currentBusiness.photo_name)),
+        has_reviews: String(Boolean(currentBusiness.rating_count)),
+        has_phone: String(Boolean(currentBusiness.phone)),
     });
     const eventSource = new EventSource(`/api/analyze/stream?${params.toString()}`);
 

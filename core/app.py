@@ -195,6 +195,13 @@ def get_photo():
     return redirect(photo_uri)
 
 
+def _bool_param(name, default=False):
+    raw = request.args.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes")
+
+
 @app.route("/api/analyze/stream")
 def analyze_business_stream():
     name = request.args.get("name")
@@ -202,6 +209,11 @@ def analyze_business_stream():
 
     if not name or not address:
         return jsonify({"error": "Missing business name or address"}), 400
+
+    has_website = _bool_param("has_website", default=False)
+    has_photos = _bool_param("has_photos", default=True)
+    has_reviews = _bool_param("has_reviews", default=True)
+    has_phone = _bool_param("has_phone", default=True)
 
     agent_key = os.getenv("AGENT_API_KEY")
     if not agent_key:
@@ -216,7 +228,11 @@ def analyze_business_stream():
     def event_stream():
         got_any_chunks = False
         try:
-            for chunk in generate_marketing_analysis_stream(name, address, provider, agent_key):
+            for chunk in generate_marketing_analysis_stream(
+                name, address, provider, agent_key,
+                has_website=has_website, has_photos=has_photos,
+                has_reviews=has_reviews, has_phone=has_phone,
+            ):
                 got_any_chunks = True
                 yield f"data: {json.dumps({'chunk': chunk})}\n\n"
         except Exception as e:

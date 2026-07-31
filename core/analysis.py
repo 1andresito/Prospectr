@@ -1,7 +1,22 @@
 # analysis.py
 from providers.registry import call_provider, call_provider_streaming
 
-def build_prompt(name, address):
+def build_prompt(name, address, has_website=False, has_photos=True, has_reviews=True, has_phone=True):
+    website_status = (
+        "No website is listed on Google"
+        if not has_website
+        else "A website is listed on Google (review it as part of your research)"
+    )
+    gaps = []
+    if not has_photos:
+        gaps.append("no photos are listed on its Google Business Profile")
+    if not has_reviews:
+        gaps.append("it has no reviews on Google yet")
+    if not has_phone:
+        gaps.append("no phone number is listed on Google")
+    gaps_line = (
+        f"- Other known gaps: {'; '.join(gaps)}\n" if gaps else ""
+    )
 
     return f"""
         You are an expert local business growth consultant, digital marketing strategist,
@@ -14,7 +29,8 @@ def build_prompt(name, address):
         BUSINESS INFORMATION:
         - Business name: {name}
         - Address: {address}
-        - Current website status: No website is listed on Google
+        - Current website status: {website_status}
+{gaps_line}
 
         Use the business name and address to research the business online. Review all publicly
         available information you can find, including:
@@ -48,10 +64,10 @@ def build_prompt(name, address):
 
         2. WEBSITE OPPORTUNITY
 
-        Since no website is currently listed on Google, explain:
+        {"Since no website is currently listed on Google, explain" if not has_website else "A website is listed on Google. Review it and explain"}:
 
         - Whether the business appears to have a website elsewhere
-        - Whether it should build a new website
+        - Whether it should build a new website or improve its existing one
         - What pages the website should contain
         - What information should appear on the homepage
         - What calls to action should be used
@@ -400,11 +416,13 @@ def build_prompt(name, address):
         - Keep the report practical, organized, and focused on getting more customers.
         """
 
-def generate_marketing_analysis(name, address, provider, api_key):
-    prompt = build_prompt(name, address)
+def generate_marketing_analysis(name, address, provider, api_key,
+                                 has_website=False, has_photos=True, has_reviews=True, has_phone=True):
+    prompt = build_prompt(name, address, has_website, has_photos, has_reviews, has_phone)
     return call_provider(provider, prompt, api_key)
 
 
-def generate_marketing_analysis_stream(name, address, provider, api_key):
-    prompt = build_prompt(name, address)
+def generate_marketing_analysis_stream(name, address, provider, api_key,
+                                        has_website=False, has_photos=True, has_reviews=True, has_phone=True):
+    prompt = build_prompt(name, address, has_website, has_photos, has_reviews, has_phone)
     yield from call_provider_streaming(provider, prompt, api_key)

@@ -1,9 +1,21 @@
 import math
 import os
+import time
 
 import requests
 
 MILES_PER_DEGREE_LATITUDE = 69.0
+
+DEFAULT_NEARBY_TYPE_GROUPS = [
+    ["restaurant", "cafe", "bar", "bakery"],
+    ["store", "clothing_store", "shoe_store", "jewelry_store", "book_store",
+     "electronics_store", "furniture_store", "home_goods_store", "pet_store", "florist"],
+    ["hair_salon", "beauty_salon", "spa", "gym"],
+    ["dentist", "doctor", "veterinary_care", "physiotherapist"],
+    ["lawyer", "accounting", "real_estate_agency", "insurance_agency", "travel_agency"],
+    ["car_repair", "car_dealer", "car_wash"],
+    ["plumber", "electrician", "locksmith", "roofing_contractor", "moving_company"],
+]
 
 
 def _api_key():
@@ -54,55 +66,107 @@ def generate_grid(center_lat, center_lng, grid_size=4, spacing_miles=1.5):
     return points
 
 
-def search_grid_cell(query, lat, lng, radius_meters, included_types=None):
-    headers = {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": _api_key(),
-        "X-Goog-FieldMask": (
-            "places.id,"
-            "places.displayName,"
-            "places.formattedAddress,"
-            "places.location,"
-            "places.websiteUri,"
-            "places.photos,"
-            "places.rating,"
-            "places.userRatingCount,"
-            "places.nationalPhoneNumber"
-        ),
-    }
+_PLACES_FIELD_MASK = (
+    "places.id,"
+    "places.displayName,"
+    "places.formattedAddress,"
+    "places.location,"
+    "places.websiteUri,"
+    "places.photos,"
+    "places.rating,"
+    "places.userRatingCount,"
+    "places.nationalPhoneNumber"
+)
 
-    if query:
-        url = "https://places.googleapis.com/v1/places:searchText"
-        body = {
-            "textQuery": query,
-            "locationBias": {
-                "circle": {
-                    "center": {"latitude": lat, "longitude": lng},
-                    "radius": radius_meters,
-                }
-            },
-        }
-        if included_types:
-            body["includedType"] = included_types[0]
-    else:
-        url = "https://places.googleapis.com/v1/places:searchNearby"
-        body = {
-            "locationRestriction": {
-                "circle": {
-                    "center": {"latitude": lat, "longitude": lng},
-                    "radius": radius_meters,
-                }
-            },
-            "maxResultCount": 20,
-        }
-        if included_types:
-            body["includedTypes"] = included_types
+_MAX_TEXT_SEARCH_PAGES = 3
+_PAGE_TOKEN_RETRY_DELAYS = (2, 3)  # seconds; only used if a token isn't ready yet
+
+
+def _search_text(query, lat, lng, radius_meters, headers, included_types=None):
+    url = "https://places.googleapis.com/v1/places:searchText"
+    base_body = {
+        "textQuery": query,
+        "locationBias": {
+            "circle": {
+                "center": {"latitude": lat, "longitude": lng},
+                "radius": radius_meters,
+            }
+        },
+    }
+    if included_types:
+        base_body["includedType"] = included_types[0]
+
+    all_places = []
+    page_token = None
+
+    for page_num in range(_MAX_TEXT_SEARCH_PAGES):
+        body = dict(base_body)
+        if page_token:
+            body["pageToken"] = page_token
+
+        response = None
+        for delay in (0,) + _PAGE_TOKEN_RETRY_DELAYS:
+            if delay:
+                time.sleep(delay)
+            response = requests.post(url, headers=headers, json=body, timeout=30)
+            if response.status_code == 200 or not page_token:
+                break
+
+        if response is None or response.status_code != 200:
+            break
+
+        data = response.json()
+        all_places.extend(data.get("places", []))
+
+        page_token = data.get("nextPageToken")
+        if not page_token:
+            break
+
+    return all_places
+
+
+def _search_nearby(lat, lng, radius_meters, headers, included_types=None):
+    url = "https://places.googleapis.com/v1/places:searchNearby"
+    body = {
+        "locationRestriction": {
+            "circle": {
+                "center": {"latitude": lat, "longitude": lng},
+                "radius": radius_meters,
+            }
+        },
+        "maxResultCount": 20,
+        "rankPreference": "DISTANCE",
+    }
+    if included_types:
+        body["includedTypes"] = included_types
 
     response = requests.post(url, headers=headers, json=body, timeout=30)
     if response.status_code != 200:
         return []
 
     return response.json().get("places", [])
+
+
+def search_grid_cell(query, lat, lng, radius_meters, included_types=None):
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": _api_key(),
+        "X-Goog-FieldMask": _PLACES_FIELD_MASK,
+    }
+
+    if query:
+        return _search_text(query, lat, lng, radius_meters, headers, included_types)
+
+    groups = [included_types] if included_types else DEFAULT_NEARBY_TYPE_GROUPS
+
+    places_by_id = {}
+    for group in groups:
+        for place in _search_nearby(lat, lng, radius_meters, headers, included_types=group):
+            place_id = place.get("id")
+            if place_id:
+                places_by_id[place_id] = place
+
+    return list(places_by_id.values())
 
 
 def get_photo_uri(photo_name, max_width=600):

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Prospectr
+Comment=A business marketing tool that helps you find businesses with certain keywords and AI analysis
+Exec=Prospectr
+Icon=prospectr
+Categories=Office;
+Terminal=false
