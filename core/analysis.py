@@ -416,13 +416,11 @@ def build_prompt(name, address, has_website=False, has_photos=True, has_reviews=
         - Keep the report practical, organized, and focused on getting more customers.
         """
 
-def generate_marketing_analysis(name, address, provider, api_key,
-                                 has_website=False, has_photos=True, has_reviews=True, has_phone=True):
+def generate_marketing_analysis(name, address, provider, api_key, has_website=False, has_photos=True, has_reviews=True, has_phone=True):
     prompt = build_prompt(name, address, has_website, has_photos, has_reviews, has_phone)
     return call_provider(provider, prompt, api_key)
 
 
-def generate_marketing_analysis_stream(name, address, provider, api_key,
-                                        has_website=False, has_photos=True, has_reviews=True, has_phone=True):
+def generate_marketing_analysis_stream(name, address, provider, api_key, has_website=False, has_photos=True, has_reviews=True, has_phone=True):
     prompt = build_prompt(name, address, has_website, has_photos, has_reviews, has_phone)
     yield from call_provider_streaming(provider, prompt, api_key)
