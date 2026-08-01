@@ -1,10 +1,16 @@
+import sys
 from pathlib import Path
 import json
 import time
 import requests
 import re
 
-VERSION_FILE = Path(__file__).parent / "VERSION.txt"
+if getattr(sys, "frozen", False):
+    RESOURCE_DIR = Path(sys._MEIPASS)
+else:
+    RESOURCE_DIR = Path(__file__).resolve().parent
+
+VERSION_FILE = RESOURCE_DIR / "VERSION.txt"
 
 def get_current_version():
     try:

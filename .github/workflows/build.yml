@@ -65,7 +65,7 @@ jobs:
         working-directory: core
         shell: bash
         run: |
-          ARGS="--onefile --name Prospectr --add-data ../templates${{ matrix.data_sep }}templates --add-data ../static${{ matrix.data_sep }}static"
+          ARGS="--onefile --name Prospectr --add-data ../templates${{ matrix.data_sep }}templates --add-data ../static${{ matrix.data_sep }}static --add-data VERSION.txt${{ matrix.data_sep }}."
           if [ "${{ matrix.os }}" != "ubuntu-latest" ]; then
             ARGS="$ARGS --windowed --icon ../assets/${{ matrix.icon_file }}"
           fi

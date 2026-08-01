@@ -97,6 +97,15 @@ def _place_to_result(place):
 def home():
     return render_template("index.html")
 
+@app.route("/api/debug/resources")
+def debug_resources():
+    import os
+    return jsonify({
+        "resource_dir": str(RESOURCE_DIR),
+        "resource_dir_contents": os.listdir(RESOURCE_DIR),
+        "meipass_or_none": getattr(sys, "_MEIPASS", None),
+    })
+
 
 @app.route("/api/check-update")
 def check_update():
