@@ -24,6 +24,14 @@
         <button id="warning-settings-link">add one in Settings</button>
     </div>
 
+    <div id="update-banner" style="display:none;">
+        A new version of Prospectr is available.
+        <a id="update-link" href="#" target="_blank">Download it here</a>
+        <button onclick="document.getElementById('update-banner').style.display='none'">Dismiss</button>
+      </div>
+
+    <div id="version-badge">v2.3.0</div>
+
     <div id="map"></div>
 
     <div id="loading-overlay" class="hidden" aria-hidden="true">
@@ -98,6 +106,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.5/purify.min.js"></script>
+
+    <script src="{{ url_for('static', filename='update-check.js') }}"></script>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 

@@ -13,6 +13,7 @@ from calculate import geocode_location, generate_grid, get_photo_uri, search_gri
 from env_manager import ENV_KEYS, get_key_status, save_keys
 from analysis import generate_marketing_analysis_stream
 from providers.registry import detect_provider
+from updater import get_update_status
 import os
 
 if getattr(sys, "frozen", False):
@@ -95,6 +96,11 @@ def _place_to_result(place):
 @app.route("/")
 def home():
     return render_template("index.html")
+
+
+@app.route("/api/check-update")
+def check_update():
+    return get_update_status()
 
 
 @app.route("/api/heartbeat", methods=["POST"])
