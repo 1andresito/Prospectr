@@ -4,7 +4,17 @@ async function checkForUpdate() {
       const data = await res.json();
   
       const badge = document.getElementById("version-badge");
-      if (badge) badge.textContent = `v${data.current_version}`;
+      if (badge) {
+        badge.textContent = `v${data.current_version}`;
+        badge.classList.remove("badge-unreleased", "badge-update-available");
+  
+        if (data.status === "unreleased") {
+          badge.textContent += " (unreleased)";
+          badge.classList.add("badge-unreleased");
+        } else if (data.status === "update_available") {
+          badge.classList.add("badge-update-available");
+        }
+      }
   
       if (data.status === "update_available") {
         document.getElementById("update-link").href = data.release_url;

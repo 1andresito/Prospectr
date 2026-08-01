@@ -223,6 +223,16 @@ body {
     font-family: sans-serif;
 }
 
+#version-badge.badge-unreleased {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+#version-badge.badge-update-available {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
 #update-banner {
     position: fixed;
     top: 0;
