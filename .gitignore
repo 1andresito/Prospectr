@@ -20,3 +20,6 @@ Thumbs.db
 # Icons Files
 .ico
 .icns
+
+# For My Debugging
+.debug/
