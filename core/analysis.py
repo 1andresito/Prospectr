@@ -1,7 +1,16 @@
 # analysis.py
 from providers.registry import call_provider, call_provider_streaming
 
-def build_prompt(name, address, has_website=False, has_photos=True, has_reviews=True, has_phone=True):
+def build_prompt(
+    name,
+    address,
+    has_website=False,
+    has_photos=True,
+    has_reviews=True,
+    has_phone=True,
+    website_url=None,
+    research_context="",
+):
     website_status = (
         "No website is listed on Google"
         if not has_website
@@ -30,24 +39,25 @@ def build_prompt(name, address, has_website=False, has_photos=True, has_reviews=
         - Business name: {name}
         - Address: {address}
         - Current website status: {website_status}
+        - Website URL: {website_url}
 {gaps_line}
 
-        Use the business name and address to research the business online. Review all publicly
-        available information you can find, including:
+        You are being given research collected by Prospectr. Use that research as evidence.
+        Do not claim that you personally browsed Google, social media, or any website unless
+        the supplied research contains evidence from that source.
 
-        - Google Business Profile
-        - Google Maps presence
-        - Google search results
-        - Social media profiles
-        - Online reviews
-        - Business directories
-        - Competitor websites
-        - Local search rankings
-        - Any other relevant public sources
+        RESEARCH DATA:
+        {research_context}
 
-        Do not ask me any follow-up questions. Complete the analysis using the information
-        available online. If something cannot be confirmed, clearly state that it could not
-        be verified instead of inventing information.
+        IMPORTANT RESEARCH RULES:
+        - Treat Google Places data supplied by the application as confirmed application data.
+        - Treat web search snippets as leads/evidence, not guaranteed facts.
+        - Treat fetched website content as evidence from that URL.
+        - If the research does not verify something, say it could not be verified.
+        - Do not invent reviews, social profiles, rankings, competitors, prices, or services.
+        - Include source URLs for important web observations when available.
+
+        Do not ask me any follow-up questions.
 
         Analyze the following areas:
 
@@ -416,11 +426,51 @@ def build_prompt(name, address, has_website=False, has_photos=True, has_reviews=
         - Keep the report practical, organized, and focused on getting more customers.
         """
 
-def generate_marketing_analysis(name, address, provider, api_key, has_website=False, has_photos=True, has_reviews=True, has_phone=True):
-    prompt = build_prompt(name, address, has_website, has_photos, has_reviews, has_phone)
+def generate_marketing_analysis(
+    name,
+    address,
+    provider,
+    api_key,
+    has_website=False,
+    has_photos=True,
+    has_reviews=True,
+    has_phone=True,
+    website_url=None,
+    research_context="",
+):
+    prompt = build_prompt(
+        name,
+        address,
+        has_website,
+        has_photos,
+        has_reviews,
+        has_phone,
+        website_url=website_url,
+        research_context=research_context,
+    )
     return call_provider(provider, prompt, api_key)
 
 
-def generate_marketing_analysis_stream(name, address, provider, api_key, has_website=False, has_photos=True, has_reviews=True, has_phone=True):
-    prompt = build_prompt(name, address, has_website, has_photos, has_reviews, has_phone)
+def generate_marketing_analysis_stream(
+    name,
+    address,
+    provider,
+    api_key,
+    has_website=False,
+    has_photos=True,
+    has_reviews=True,
+    has_phone=True,
+    website_url=None,
+    research_context="",
+):
+    prompt = build_prompt(
+        name,
+        address,
+        has_website,
+        has_photos,
+        has_reviews,
+        has_phone,
+        website_url=website_url,
+        research_context=research_context,
+    )
     yield from call_provider_streaming(provider, prompt, api_key)

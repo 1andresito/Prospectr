@@ -6,6 +6,9 @@ on:
       - "v*"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -104,3 +107,54 @@ jobs:
         with:
           name: Prospectr-Linux
           path: core/Prospectr-x86_64.AppImage
+
+
+  release:
+    name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Package release files
+        shell: bash
+        run: |
+          mkdir -p packaged
+
+          # Windows artifact
+          if [ -f "release-assets/Prospectr-Windows/Prospectr.exe" ]; then
+            cp "release-assets/Prospectr-Windows/Prospectr.exe" /tmp/Prospectr.exe
+            cd /tmp
+            zip -q "Prospectr-Windows.zip" Prospectr.exe
+            cd -
+            mv /tmp/Prospectr-Windows.zip packaged/
+          fi
+
+          # macOS artifact
+          if [ -f "release-assets/Prospectr-Mac/Prospectr" ]; then
+            cp "release-assets/Prospectr-Mac/Prospectr" /tmp/Prospectr
+            chmod +x /tmp/Prospectr
+            cd /tmp
+            zip -q "Prospectr-Mac.zip" Prospectr
+            cd -
+            mv /tmp/Prospectr-Mac.zip packaged/
+          fi
+
+          # Linux artifact
+          if [ -f "release-assets/Prospectr-Linux/Prospectr-x86_64.AppImage" ]; then
+            cp "release-assets/Prospectr-Linux/Prospectr-x86_64.AppImage" packaged/
+          fi
+
+          ls -lh packaged
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            packaged/*

@@ -1,5 +1,4 @@
 /* style.css */
-/* Remove default browser margins so the map can fill the entire screen */
 body {
     margin: 0;
     padding: 0;
@@ -11,7 +10,6 @@ body {
     width: 100%;
 }
 
-/* The search bar floats on top of the map, positioned in the corner */
 #search-bar {
     position: absolute;
     top: 10px;
@@ -531,4 +529,25 @@ body {
     border-color: #2563eb;
     background: #eff6ff;
     font-weight: 600;
+}
+
+.settings-field input[type="range"] {
+    width: 100%;
+    padding: 0;
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+.settings-range-value {
+    display: block;
+    margin: 4px 0 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.settings-help {
+    margin: 5px 0 0;
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: #64748b;
 }

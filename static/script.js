@@ -100,36 +100,95 @@ const settingsFields = document.getElementById("settings-fields");
 const settingsStatus = document.getElementById("settings-status");
 
 async function loadSettingsFields() {
-    const response = await fetch("/api/settings");
-    const keyStatuses = await response.json();
+    try {
+        const response = await fetch("/api/settings", { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-    settingsFields.innerHTML = "";
+        const settings = await response.json();
+        settingsFields.innerHTML = "";
 
-    keyStatuses.forEach((key) => {
-        const wrapper = document.createElement("div");
-        wrapper.className = "settings-field";
+        settings.forEach((setting) => {
+            const wrapper = document.createElement("div");
+            wrapper.className = "settings-field";
 
-        const label = document.createElement("label");
-        label.textContent = key.label;
-        label.setAttribute("for", `key-${key.name}`);
+            const label = document.createElement("label");
+            label.textContent = setting.label;
+            label.setAttribute("for", `setting-${setting.name}`);
+            wrapper.appendChild(label);
 
-        const current = document.createElement("p");
-        current.className = "settings-current";
-        current.textContent = key.is_set
-            ? `Currently set (${key.preview})`
-            : "Not set yet";
+            if (setting.type === "secret") {
+                const current = document.createElement("p");
+                current.className = "settings-current";
+                current.textContent = setting.is_set
+                    ? `Currently set (${setting.preview})`
+                    : "Not set yet";
 
-        const input = document.createElement("input");
-        input.type = "password";
-        input.id = `key-${key.name}`;
-        input.dataset.keyName = key.name;
-        input.placeholder = key.is_set ? "Enter a new value to replace it" : "Paste your API key";
+                const input = document.createElement("input");
+                input.type = "password";
+                input.id = `setting-${setting.name}`;
+                input.dataset.keyName = setting.name;
+                input.placeholder = setting.is_set
+                    ? "Enter a new value to replace it"
+                    : "Paste your API key";
 
-        wrapper.appendChild(label);
-        wrapper.appendChild(current);
-        wrapper.appendChild(input);
-        settingsFields.appendChild(wrapper);
-    });
+                wrapper.appendChild(current);
+                wrapper.appendChild(input);
+            } else if (setting.type === "select") {
+                const select = document.createElement("select");
+                select.id = `setting-${setting.name}`;
+                select.dataset.settingName = setting.name;
+
+                setting.options.forEach((option) => {
+                    const optionEl = document.createElement("option");
+                    optionEl.value = option.value;
+                    optionEl.textContent = option.label;
+                    optionEl.selected = option.value === setting.value;
+                    select.appendChild(optionEl);
+                });
+
+                wrapper.appendChild(select);
+
+                if (setting.name === "AI_PROVIDER") {
+                    const help = document.createElement("p");
+                    help.className = "settings-help";
+                    help.textContent =
+                        "Choose the provider that matches the AI key you enter below.";
+                    wrapper.appendChild(help);
+                }
+            } else if (setting.type === "range") {
+                const valueLabel = document.createElement("span");
+                valueLabel.className = "settings-range-value";
+                valueLabel.textContent = `${setting.value} × ${setting.value} search grid`;
+
+                const range = document.createElement("input");
+                range.type = "range";
+                range.id = `setting-${setting.name}`;
+                range.dataset.settingName = setting.name;
+                range.min = setting.min;
+                range.max = setting.max;
+                range.step = "1";
+                range.value = setting.value;
+
+                range.addEventListener("input", () => {
+                    valueLabel.textContent =
+                        `${range.value} × ${range.value} search grid`;
+                });
+
+                wrapper.appendChild(valueLabel);
+                wrapper.appendChild(range);
+
+                const help = document.createElement("p");
+                help.className = "settings-help";
+                help.textContent = setting.description;
+                wrapper.appendChild(help);
+            }
+
+            settingsFields.appendChild(wrapper);
+        });
+    } catch (error) {
+        settingsFields.innerHTML =
+            `<p class="settings-status">Could not load settings: ${escapeHtml(error.message)}</p>`;
+    }
 }
 
 function openSettings() {
@@ -143,34 +202,50 @@ function closeSettings() {
 }
 
 async function saveSettings() {
-    const inputs = settingsFields.querySelectorAll("input[data-key-name]");
     const payload = {};
 
-    inputs.forEach((input) => {
+    settingsFields.querySelectorAll("input[data-key-name]").forEach((input) => {
         if (input.value.trim() !== "") {
             payload[input.dataset.keyName] = input.value.trim();
         }
     });
 
+    const provider = document.getElementById("setting-AI_PROVIDER");
+    if (provider) {
+        payload.AI_PROVIDER = provider.value;
+    }
+
+    const gridSize = document.getElementById("setting-SEARCH_GRID_SIZE");
+    if (gridSize) {
+        payload.SEARCH_GRID_SIZE = Number(gridSize.value);
+    }
+
     if (Object.keys(payload).length === 0) {
-        settingsStatus.textContent = "Enter at least one key to save.";
+        settingsStatus.textContent = "Nothing to save.";
         return;
     }
 
-    const response = await fetch("/api/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-    });
+    try {
+        const response = await fetch("/api/settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
 
-    const result = await response.json();
+        const result = await response.json();
 
-    if (response.ok) {
+        if (!response.ok) {
+            settingsStatus.textContent =
+                "Error: " + (result.error || "could not save");
+            return;
+        }
+
         settingsStatus.textContent = "Saved.";
-        loadSettingsFields();
-        checkApiKeyStatus();
-    } else {
-        settingsStatus.textContent = "Error: " + (result.error || "could not save");
+        await loadSettingsFields();
+        await checkApiKeyStatus();
+    } catch (error) {
+        settingsStatus.textContent =
+            "Error: " + error.message;
     }
 }
 
@@ -299,11 +374,27 @@ analyzeBtn.addEventListener("click", () => {
         has_photos: String(Boolean(currentBusiness.photo_name)),
         has_reviews: String(Boolean(currentBusiness.rating_count)),
         has_phone: String(Boolean(currentBusiness.phone)),
+        website_url: currentBusiness.website_url || "",
     });
     const eventSource = new EventSource(`/api/analyze/stream?${params.toString()}`);
 
     eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
+
+        if (data.status === "researching") {
+            analysisContent.innerHTML =
+                '<p class="analysis-loading">Researching the business online...</p>';
+        }
+
+        if (data.status === "research_complete") {
+            analysisContent.innerHTML =
+                `<p class="analysis-loading">Research complete (${data.source_count} sources). Generating analysis...</p>`;
+        }
+
+        if (data.status === "research_unavailable") {
+            analysisContent.innerHTML =
+                '<p class="analysis-loading">Search research is not configured. Generating analysis from available business data...</p>';
+        }
 
         if (data.chunk) {
             if (!firstChunkReceived) {

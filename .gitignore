@@ -1,14 +1,19 @@
-# Virtual Environment
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
 .venv/
+venv/
+env/
 build-env/
 
-#Environment Variables
+# Environment / secrets
 .env
+.env.*
 
-#Python Cache
-__pycache__/
-
-# PyInstaller build artifacts
+# Build output
 build/
 dist/
 *.spec
@@ -17,9 +22,10 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Icons Files
-.ico
-.icns
+# Generated icons
+*.ico
+*.icns
 
-# For My Debugging
+# Debug / temporary
 .debug/
+*.log

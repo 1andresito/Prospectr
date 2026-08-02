@@ -10,9 +10,21 @@ from platformdirs import user_config_dir
 from flask import Flask, jsonify, redirect, render_template, request, Response, stream_with_context
 
 from calculate import geocode_location, generate_grid, get_photo_uri, search_grid_cell
-from env_manager import ENV_KEYS, get_key_status, save_keys
+from env_manager import (
+    ENV_KEYS,
+    AI_PROVIDERS,
+    get_key_status,
+    save_keys,
+    get_active_provider,
+    save_active_provider,
+    get_grid_size,
+    save_grid_size,
+    validate_provider_key,
+)
 from analysis import generate_marketing_analysis_stream
-from providers.registry import detect_provider
+from providers.registry import call_provider_streaming
+from research import research_business
+from migrations import run_migrations
 from updater import get_update_status
 import os
 
@@ -34,6 +46,7 @@ else:
     ENV_PATH = DATA_DIR / ".env"
 
 load_dotenv(ENV_PATH)
+run_migrations(CONFIG_DIR if getattr(sys, "frozen", False) else ENV_PATH.parent)
 
 app = Flask(
     __name__,
@@ -41,7 +54,7 @@ app = Flask(
     static_folder=str(RESOURCE_DIR / "static"),
 )
 
-GRID_SIZE = 4
+DEFAULT_GRID_SIZE = 3
 GRID_SPACING_MILES = 1.5
 SEARCH_RADIUS_METERS = 1800
 
@@ -89,6 +102,7 @@ def _place_to_result(place):
         "rating_count": place.get("userRatingCount"),
         "phone": place.get("nationalPhoneNumber"),
         "has_website": "websiteUri" in place,
+        "website_url": place.get("websiteUri"),
         "photo_name": photo_name,
     }
 
@@ -126,17 +140,57 @@ def get_settings():
 def update_settings():
     data = request.get_json(silent=True) or {}
 
+    provider = data.get("AI_PROVIDER")
+    grid_size = data.get("SEARCH_GRID_SIZE")
+
+    # Validate the provider without modifying the saved configuration first.
+    selected_provider = get_active_provider(ENV_PATH)
+    if provider is not None:
+        selected_provider = str(provider).strip()
+        valid_values = {p["value"] for p in AI_PROVIDERS}
+        if selected_provider not in valid_values:
+            return jsonify({"error": f"Unknown AI provider: {selected_provider}"}), 400
+
+    # Validate either the newly supplied key or the currently stored key.
+    # This catches a Claude key + NVIDIA selection even when the user only
+    # changes the provider dropdown.
+    new_agent_key = str(data.get("AGENT_API_KEY", "")).strip()
+    current_agent_key = os.getenv("AGENT_API_KEY", "")
+    candidate_key = new_agent_key or current_agent_key
+
+    if candidate_key:
+        valid, error = validate_provider_key(selected_provider, candidate_key)
+        if not valid:
+            return jsonify({"error": error}), 400
+
     allowed_names = {key_def["name"] for key_def in ENV_KEYS}
-    new_values = {name: value for name, value in data.items() if name in allowed_names}
+    new_values = {
+        name: str(value).strip()
+        for name, value in data.items()
+        if name in allowed_names and str(value).strip()
+    }
 
-    if not new_values:
-        return jsonify({"error": "No valid keys provided"}), 400
+    try:
+        if new_values:
+            updated = save_keys(ENV_PATH, new_values)
+            for key, value in updated.items():
+                os.environ[key] = value
 
-    updated = save_keys(ENV_PATH, new_values)
-    for key, value in updated.items():
-        os.environ[key] = value
+        if provider is not None:
+            save_active_provider(ENV_PATH, selected_provider)
+            os.environ["AI_PROVIDER"] = selected_provider
 
-    return jsonify({"status": "saved"})
+        if grid_size is not None:
+            saved_size = save_grid_size(ENV_PATH, grid_size)
+            os.environ["SEARCH_GRID_SIZE"] = str(saved_size)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    return jsonify({
+        "status": "saved",
+        "provider": get_active_provider(ENV_PATH),
+        "search_grid_size": get_grid_size(ENV_PATH),
+    })
 
 
 @app.route("/api/search")
@@ -163,8 +217,9 @@ def search_businesses():
         return jsonify({"error": f"Could not find location: {location}"}), 400
 
     center_lat, center_lng = center
+    grid_size = get_grid_size(ENV_PATH)
     grid_points = generate_grid(
-        center_lat, center_lng, grid_size=GRID_SIZE, spacing_miles=GRID_SPACING_MILES
+        center_lat, center_lng, grid_size=grid_size, spacing_miles=GRID_SPACING_MILES
     )
 
     all_places_by_id = {}
@@ -219,27 +274,51 @@ def analyze_business_stream():
     has_photos = _bool_param("has_photos", default=True)
     has_reviews = _bool_param("has_reviews", default=True)
     has_phone = _bool_param("has_phone", default=True)
+    website_url = request.args.get("website_url") or None
 
     agent_key = os.getenv("AGENT_API_KEY")
     if not agent_key:
-        return jsonify({"error": "No Agent API key set. Add one in Settings first."}), 400
+        return jsonify({"error": "No AI API key set. Add one in Settings first."}), 400
 
-    provider = detect_provider(agent_key)
-    if provider is None:
-        return jsonify({
-            "error": "Couldn't recognize this API key's provider. Double-check you pasted it correctly."
-        }), 400
+    provider = get_active_provider(ENV_PATH)
+    valid, provider_error = validate_provider_key(provider, agent_key)
+    if not valid:
+        return jsonify({"error": provider_error}), 400
 
     def event_stream():
         got_any_chunks = False
+
+        # Research runs before the AI request. Send progress events so the UI
+        # can tell the user that work is happening.
+        yield f"data: {json.dumps({'status': 'researching'})}\n\n"
+
         try:
+            research = research_business(
+                name,
+                address,
+                website_url=website_url,
+            )
+
+            if research["enabled"]:
+                yield f"data: {json.dumps({'status': 'research_complete', 'source_count': len(research['sources'])})}\n\n"
+            else:
+                yield f"data: {json.dumps({'status': 'research_unavailable'})}\n\n"
+
             for chunk in generate_marketing_analysis_stream(
-                name, address, provider, agent_key,
-                has_website=has_website, has_photos=has_photos,
-                has_reviews=has_reviews, has_phone=has_phone,
+                name,
+                address,
+                provider,
+                agent_key,
+                has_website=has_website,
+                has_photos=has_photos,
+                has_reviews=has_reviews,
+                has_phone=has_phone,
+                website_url=website_url,
+                research_context=research["context"],
             ):
                 got_any_chunks = True
                 yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
             return
@@ -247,9 +326,13 @@ def analyze_business_stream():
         if got_any_chunks:
             yield f"data: {json.dumps({'done': True})}\n\n"
         else:
-            yield f"data: {json.dumps({'error': 'Analysis request failed. Check your API key and try again.'})}\n\n"
+            yield f"data: {json.dumps({'error': 'Analysis request failed. Check your AI provider, API key, and Research Search API key.'})}\n\n"
 
-    return Response(stream_with_context(event_stream()), mimetype="text/event-stream")
+    return Response(
+        stream_with_context(event_stream()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 def _open_browser():

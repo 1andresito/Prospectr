@@ -104,5 +104,4 @@ This repo uses GitHub Actions to build the Windows and Mac executable automatica
 
 ```
 
-GitHub Actions will build both executable (see the "Actions" tab for progress). Once done, download them from the workflow's build artifacts, zip each one, and attach them to a new GitHub Release so step 2 above for users has something to download.
-
+GitHub Actions will build the three executable (see the "Actions" tab for progress). Once done, download them from the workflow's build artifacts, zip each one, and attach them to a new GitHub Release so step 2 above for users has something to download.
