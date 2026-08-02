@@ -1,4 +1,4 @@
-<!--index.html-->
+<!-- index.html -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -26,11 +26,15 @@
 
     <div id="update-banner" style="display:none;">
         A new version of Prospectr is available.
-        <a id="update-link" href="#" target="_blank">Download it here</a>
-        <button onclick="document.getElementById('update-banner').style.display='none'">Dismiss</button>
-      </div>
+        <a id="update-link" href="#" target="_blank" rel="noopener noreferrer">
+            Download it here
+        </a>
+        <button onclick="document.getElementById('update-banner').style.display='none'">
+            Dismiss
+        </button>
+    </div>
 
-    <div id="version-badge">v2.3.0</div>
+    <div id="version-badge">Checking version...</div>
 
     <div id="map"></div>
 
@@ -59,7 +63,9 @@
                 <button id="types-close-btn" aria-label="Close">&times;</button>
             </div>
             <div id="types-list"><!-- filled in by script.js --></div>
-            <button id="types-clear-btn" class="category-option">Clear (search all types)</button>
+            <button id="types-clear-btn" class="category-option">
+                Clear (search all types)
+            </button>
         </div>
     </div>
 
@@ -75,9 +81,10 @@
         </div>
     </div>
 
-
     <div id="analysis-panel" class="hidden" role="complementary" aria-label="Business details">
-        <button id="analysis-close-btn" class="panel-close-btn" aria-label="Close">&times;</button>
+        <button id="analysis-close-btn" class="panel-close-btn" aria-label="Close">
+            &times;
+        </button>
 
         <div id="panel-scroll">
             <div id="business-photo-wrap">
@@ -96,9 +103,15 @@
 
                 <div id="business-badges"><!-- filled in by script.js --></div>
 
-                <button id="analyze-btn" class="analyze-btn">Analyze Marketing Strategies</button>
+                <button id="analyze-btn" class="analyze-btn">
+                    Analyze Marketing Strategies
+                </button>
+
                 <div id="analysis-content"></div>
-                <button id="download-pdf-btn" class="hidden">Download as PDF</button>
+
+                <button id="download-pdf-btn" class="hidden">
+                    Download as PDF
+                </button>
             </div>
         </div>
     </div>
@@ -112,5 +125,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
+
 </body>
 </html>
+```
