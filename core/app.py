@@ -1,3 +1,4 @@
+import secrets
 import sys
 import threading
 import time
@@ -9,12 +10,19 @@ from dotenv import load_dotenv
 from platformdirs import user_config_dir
 from flask import Flask, jsonify, redirect, render_template, request, Response, stream_with_context
 
-from calculate import geocode_location, generate_grid, get_photo_uri, search_grid_cell
+from calculate import (
+    PlacesAPIError,
+    geocode_location,
+    generate_grid,
+    get_photo_uri,
+    search_grid_cell,
+)
 from env_manager import (
     ENV_KEYS,
     AI_PROVIDERS,
     get_key_status,
     save_keys,
+    clear_keys,
     get_active_provider,
     save_active_provider,
     get_grid_size,
@@ -22,7 +30,7 @@ from env_manager import (
     validate_provider_key,
 )
 from analysis import generate_marketing_analysis_stream
-from providers.registry import call_provider_streaming
+from providers import TRUNCATED
 from research import research_business
 from migrations import run_migrations
 from updater import get_update_status
@@ -54,15 +62,19 @@ app = Flask(
     static_folder=str(RESOURCE_DIR / "static"),
 )
 
-DEFAULT_GRID_SIZE = 3
 GRID_SPACING_MILES = 1.5
 SEARCH_RADIUS_METERS = 1800
 
 AUTO_SHUTDOWN_ENABLED = getattr(sys, "frozen", False)
 HEARTBEAT_TIMEOUT_SECONDS = 10
 
-_last_heartbeat = time.time()
+STARTUP_GRACE_SECONDS = 90
+
+APP_TOKEN = secrets.token_urlsafe(32)
+
+_last_heartbeat = None
 _heartbeat_lock = threading.Lock()
+_started_at = time.time()
 
 
 def _watch_for_disconnect():
@@ -72,13 +84,41 @@ def _watch_for_disconnect():
     HEARTBEAT_TIMEOUT_SECONDS, we assume the tab was closed and exit the
     whole process — this is what actually makes the app stop running in
     the background after the user closes the window.
+
+    Before the first heartbeat ever arrives we measure against the startup
+    grace period instead, so a slow launch is not mistaken for a closed tab.
     """
     while True:
         time.sleep(1)
         with _heartbeat_lock:
-            elapsed = time.time() - _last_heartbeat
-        if elapsed > HEARTBEAT_TIMEOUT_SECONDS:
+            last = _last_heartbeat
+
+        if last is None:
+            if time.time() - _started_at > STARTUP_GRACE_SECONDS:
+                os._exit(0)
+            continue
+
+        if time.time() - last > HEARTBEAT_TIMEOUT_SECONDS:
             os._exit(0)
+
+
+@app.before_request
+def _require_app_token():
+    """
+    Gate every /api/ route behind the per-launch token.
+
+    EventSource cannot set headers, so the token is also accepted as a query
+    parameter for the streaming endpoint.
+    """
+    if not request.path.startswith("/api/"):
+        return None
+
+    supplied = request.headers.get("X-Prospectr-Token") or request.args.get("token")
+    if supplied and secrets.compare_digest(supplied, APP_TOKEN):
+        return None
+
+    return jsonify({"error": "Invalid or missing application token."}), 403
+
 
 CATEGORY_FILTERS = {
     "no_website": lambda place: "websiteUri" not in place,
@@ -109,7 +149,7 @@ def _place_to_result(place):
 
 @app.route("/")
 def home():
-    return render_template("index.html")
+    return render_template("index.html", app_token=APP_TOKEN)
 
 @app.route("/api/check-update")
 def check_update():
@@ -122,6 +162,19 @@ def heartbeat():
     with _heartbeat_lock:
         _last_heartbeat = time.time()
     return "", 204
+
+
+@app.errorhandler(PlacesAPIError)
+def handle_places_error(exc):
+    """
+    Surface Google Places failures as JSON the frontend can display.
+
+    Without this the default 500 handler returns an HTML page, the browser
+    fails to parse it as JSON, and the user sees no explanation at all for
+    the most common setup mistakes (billing not enabled, key restricted to
+    the wrong API, quota exhausted).
+    """
+    return jsonify({"error": exc.message}), 502
 
 
 @app.route("/api/shutdown", methods=["POST"])
@@ -143,7 +196,15 @@ def update_settings():
     provider = data.get("AI_PROVIDER")
     grid_size = data.get("SEARCH_GRID_SIZE")
 
-    # Validate the provider without modifying the saved configuration first.
+    allowed_names = {key_def["name"] for key_def in ENV_KEYS}
+
+
+    removals = {
+        str(name).strip()
+        for name in (data.get("clear_keys") or [])
+        if str(name).strip() in allowed_names
+    }
+
     selected_provider = get_active_provider(ENV_PATH)
     if provider is not None:
         selected_provider = str(provider).strip()
@@ -151,26 +212,32 @@ def update_settings():
         if selected_provider not in valid_values:
             return jsonify({"error": f"Unknown AI provider: {selected_provider}"}), 400
 
-    # Validate either the newly supplied key or the currently stored key.
-    # This catches a Claude key + NVIDIA selection even when the user only
-    # changes the provider dropdown.
     new_agent_key = str(data.get("AGENT_API_KEY", "")).strip()
     current_agent_key = os.getenv("AGENT_API_KEY", "")
     candidate_key = new_agent_key or current_agent_key
+
+    if "AGENT_API_KEY" in removals and not new_agent_key:
+        candidate_key = ""
 
     if candidate_key:
         valid, error = validate_provider_key(selected_provider, candidate_key)
         if not valid:
             return jsonify({"error": error}), 400
 
-    allowed_names = {key_def["name"] for key_def in ENV_KEYS}
     new_values = {
         name: str(value).strip()
         for name, value in data.items()
         if name in allowed_names and str(value).strip()
     }
 
+    removals -= set(new_values)
+
     try:
+        if removals:
+            clear_keys(ENV_PATH, removals)
+            for key in removals:
+                os.environ.pop(key, None)
+
         if new_values:
             updated = save_keys(ENV_PATH, new_values)
             for key, value in updated.items():
@@ -287,9 +354,8 @@ def analyze_business_stream():
 
     def event_stream():
         got_any_chunks = False
+        truncated = False
 
-        # Research runs before the AI request. Send progress events so the UI
-        # can tell the user that work is happening.
         yield f"data: {json.dumps({'status': 'researching'})}\n\n"
 
         try:
@@ -316,6 +382,10 @@ def analyze_business_stream():
                 website_url=website_url,
                 research_context=research["context"],
             ):
+                if chunk is TRUNCATED:
+                    truncated = True
+                    continue
+
                 got_any_chunks = True
                 yield f"data: {json.dumps({'chunk': chunk})}\n\n"
 
@@ -324,9 +394,9 @@ def analyze_business_stream():
             return
 
         if got_any_chunks:
-            yield f"data: {json.dumps({'done': True})}\n\n"
+            yield f"data: {json.dumps({'done': True, 'truncated': truncated})}\n\n"
         else:
-            yield f"data: {json.dumps({'error': 'Analysis request failed. Check your AI provider, API key, and Research Search API key.'})}\n\n"
+            yield f"data: {json.dumps({'error': 'The AI provider returned an empty response. Try again, or switch providers in Settings.'})}\n\n"
 
     return Response(
         stream_with_context(event_stream()),

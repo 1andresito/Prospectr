@@ -1,5 +1,5 @@
 # analysis.py
-from providers.registry import call_provider, call_provider_streaming
+from providers.registry import call_provider_streaming
 
 def build_prompt(
     name,
@@ -412,6 +412,62 @@ def build_prompt(
         - Avoid unrealistic promises
         - Sound personally written rather than automated
 
+        ## 13. AI Handoff Brief
+
+        Everything above is written for a person to read and act on. This final
+        section is different: it is written for another AI system that will be
+        given this report as its only input and asked to build something from
+        it — most often a landing page or website for this business.
+
+        Write it so that an AI reading only this section has enough to work
+        with, without needing the rest of the report. Repeat facts from earlier
+        sections rather than referring back to them. Do not write "as noted
+        above" or "see section 4" — the reader may have only this part.
+
+        Use exactly this structure, keeping the `KEY: value` lines intact so
+        they can be parsed:
+
+        ```
+        BUSINESS_NAME: {name}
+        ADDRESS: {address}
+        INDUSTRY: <specific category, e.g. "family-owned Italian restaurant">
+        SERVICE_AREA: <city / neighbourhoods / radius served>
+        EXISTING_WEBSITE: <URL, or NONE>
+        PHONE: <number, or UNVERIFIED>
+        TARGET_CUSTOMER: <one or two sentences describing who buys from them>
+        CUSTOMER_PROBLEM: <the problem the customer has when they go looking>
+        SERVICES: <pipe-separated list of the services or products to feature>
+        VALUE_PROPOSITION: <one sentence on why a customer should pick them>
+        DIFFERENTIATORS: <pipe-separated list of concrete, verified advantages>
+        TRUST_SIGNALS: <pipe-separated: ratings, review counts, years in
+          business, certifications, affiliations — only ones the research
+          verified, each with its source>
+        PRIMARY_CTA: <the single most important action a visitor should take>
+        SECONDARY_CTA: <the fallback action>
+        TONE: <3-5 adjectives for the copy voice, justified by this business
+          type and its customers>
+        BRAND_NOTES: <any existing colours, logo, or visual style found in the
+          research, or NONE FOUND>
+        LOCAL_KEYWORDS: <pipe-separated list of 8-12 search phrases>
+        COMPETITOR_CONTEXT: <what competing businesses' sites do well, and the
+          gap this business can occupy>
+        ```
+
+        Then, still inside this section, provide:
+
+        **Recommended page sections, in order.** For each one give a heading,
+        what it contains, and draft copy the AI can use or adapt — real
+        sentences about this specific business, not placeholders like "Lorem
+        ipsum" or "[Your business here]".
+
+        **Conversion requirements.** Forms, booking, click-to-call, maps embed,
+        hours display, and anything else the page needs to function for this
+        kind of business.
+
+        **Facts that could not be verified.** List anything an AI must not
+        state as fact on a public page, so it does not invent claims about this
+        business. Be explicit — this list protects the business owner.
+
         IMPORTANT RULES:
 
         - Do not ask follow-up questions.
@@ -425,31 +481,6 @@ def build_prompt(
         - Do not contact the business or submit any forms.
         - Keep the report practical, organized, and focused on getting more customers.
         """
-
-def generate_marketing_analysis(
-    name,
-    address,
-    provider,
-    api_key,
-    has_website=False,
-    has_photos=True,
-    has_reviews=True,
-    has_phone=True,
-    website_url=None,
-    research_context="",
-):
-    prompt = build_prompt(
-        name,
-        address,
-        has_website,
-        has_photos,
-        has_reviews,
-        has_phone,
-        website_url=website_url,
-        research_context=research_context,
-    )
-    return call_provider(provider, prompt, api_key)
-
 
 def generate_marketing_analysis_stream(
     name,

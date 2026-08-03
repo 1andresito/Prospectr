@@ -97,6 +97,17 @@ def save_keys(env_path, new_values):
     return current
 
 
+def clear_keys(env_path, names):
+    """Remove saved keys entirely so a mistyped key can be taken back out."""
+    current = _parse_env_file(env_path)
+    removed = [name for name in names if current.pop(name, None) is not None]
+
+    if removed:
+        _write_env_file(env_path, current)
+
+    return removed
+
+
 def get_active_provider(env_path):
     current = _parse_env_file(env_path)
     provider = current.get("AI_PROVIDER", DEFAULT_PROVIDER)

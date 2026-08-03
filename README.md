@@ -89,6 +89,21 @@ python core/app.py
 
 ```
 
+Run the tests:
+
+```bash
+
+pip install -r requirements-dev.txt
+
+pytest
+
+```
+
+Frontend libraries (Leaflet, jsPDF, marked, DOMPurify) are vendored in
+`static/vendor/` rather than loaded from a CDN, so the packaged app still
+starts without an internet connection. Map tiles are the one part that
+genuinely needs the network.
+
 ## Building a new release
 
 This repo uses GitHub Actions to build the Windows and Mac executable automatically. To publish a new version:
@@ -103,5 +118,9 @@ This repo uses GitHub Actions to build the Windows and Mac executable automatica
    git push origin v1.0.0
 
 ```
+
+The build stamps `core/VERSION.txt` from the tag name, so the version shown
+in the app always matches the release it came from — there is no separate
+version file to remember to bump.
 
 GitHub Actions will build the three executable (see the "Actions" tab for progress). Once done, download them from the workflow's build artifacts, zip each one, and attach them to a new GitHub Release so step 2 above for users has something to download.

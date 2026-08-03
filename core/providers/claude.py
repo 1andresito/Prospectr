@@ -1,69 +1,70 @@
-import requests
 import json
 
-CLAUDE_MODEL = "claude-sonnet-4-5"
+import requests
+
+from providers import TRUNCATED, ProviderError, error_detail
+
 CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
+CLAUDE_MODEL = "claude-sonnet-4-5"
+ANTHROPIC_VERSION = "2023-06-01"
 
+MAX_OUTPUT_TOKENS = 16000
+READ_TIMEOUT_SECONDS = 120
 
-def call(prompt, api_key):
-    """Sends prompt to Anthropic Claude. Returns the text response, or None on failure."""
-    headers = {
-        "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
-    }
-    body = {
-        "model": CLAUDE_MODEL,
-        "max_tokens": 4000,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-
-    try:
-        response = requests.post(CLAUDE_API_URL, headers=headers, json=body, timeout=90)
-    except requests.exceptions.RequestException as e:
-        print(f"Claude request failed with an exception: {e}")
-        return None
-
-    if response.status_code != 200:
-        print(f"Claude API returned status {response.status_code}: {response.text}")
-        return None
-
-    try:
-        return response.json()["content"][0]["text"]
-    except (KeyError, IndexError):
-        return None
 
 def call_streaming(prompt, api_key):
+    """Yield the analysis from Anthropic's Messages API."""
     headers = {
         "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
+        "anthropic-version": ANTHROPIC_VERSION,
         "Content-Type": "application/json",
     }
     body = {
         "model": CLAUDE_MODEL,
-        "max_tokens": 4000,
+        "max_tokens": MAX_OUTPUT_TOKENS,
         "messages": [{"role": "user", "content": prompt}],
         "stream": True,
     }
 
     try:
-        response = requests.post(CLAUDE_API_URL, headers=headers, json=body, timeout=90, stream=True)
-    except requests.exceptions.RequestException as e:
-        print(f"Claude streaming request failed: {e}")
-        return
+        response = requests.post(
+            CLAUDE_API_URL,
+            headers=headers,
+            json=body,
+            timeout=READ_TIMEOUT_SECONDS,
+            stream=True,
+        )
+    except requests.exceptions.RequestException as exc:
+        raise ProviderError(f"Could not contact Claude: {exc}") from exc
 
     if response.status_code != 200:
-        print(f"Claude API returned status {response.status_code}: {response.text}")
-        return
+        raise ProviderError(error_detail(response, "Claude"))
+
+    hit_cap = False
 
     for line in response.iter_lines(decode_unicode=True):
         if not line or not line.startswith("data: "):
             continue
+
         try:
             chunk = json.loads(line[len("data: "):])
         except json.JSONDecodeError:
             continue
-        if chunk.get("type") == "content_block_delta":
+
+        chunk_type = chunk.get("type")
+
+        if chunk_type == "content_block_delta":
             text = chunk.get("delta", {}).get("text")
             if text:
                 yield text
+
+        elif chunk_type == "message_delta":
+            if chunk.get("delta", {}).get("stop_reason") == "max_tokens":
+                hit_cap = True
+
+        elif chunk_type == "error":
+            message = chunk.get("error", {}).get("message", "unknown streaming error")
+            raise ProviderError(f"Claude streaming error: {message}")
+
+    if hit_cap:
+        yield TRUNCATED

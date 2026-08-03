@@ -4,7 +4,8 @@
 <head>
 
     <title>Prospectr - Business Finder</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <meta name="prospectr-token" content="{{ app_token }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet.css') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
 
 </head>
@@ -101,6 +102,8 @@
                     <span id="business-phone" class="meta-pill hidden"></span>
                 </div>
 
+                <div id="business-links"><!-- filled in by script.js --></div>
+
                 <div id="business-badges"><!-- filled in by script.js --></div>
 
                 <button id="analyze-btn" class="analyze-btn">
@@ -109,21 +112,28 @@
 
                 <div id="analysis-content"></div>
 
-                <button id="download-pdf-btn" class="hidden">
-                    Download as PDF
-                </button>
+                <div id="analysis-actions" class="hidden">
+                    <button id="download-pdf-btn">Download as PDF</button>
+                    <button id="copy-ai-btn" title="Copy the full report as Markdown">
+                        Copy for AI
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.5/purify.min.js"></script>
+    <!--
+      These are vendored under static/vendor rather than loaded from a CDN so
+      the packaged app still starts when the machine is offline or the CDN is
+      blocked. Map tiles are the one thing that genuinely needs the network.
+    -->
+    <script src="{{ url_for('static', filename='vendor/jspdf.umd.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/marked.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/purify.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/leaflet.js') }}"></script>
 
+    <script src="{{ url_for('static', filename='api.js') }}"></script>
     <script src="{{ url_for('static', filename='update-check.js') }}"></script>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 
 </body>

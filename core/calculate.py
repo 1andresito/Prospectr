@@ -175,8 +175,6 @@ def _search_text(
         if page_token:
             body["pageToken"] = page_token
 
-        data = None
-
         for delay in (0,) + _PAGE_TOKEN_RETRY_DELAYS:
             if delay:
                 time.sleep(delay)

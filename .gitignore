@@ -29,3 +29,7 @@ Thumbs.db
 # Debug / temporary
 .debug/
 *.log
+
+# Runtime state written next to the app when running from source
+.data_version
+.pytest_cache/

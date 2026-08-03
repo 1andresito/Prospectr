@@ -64,6 +64,18 @@ jobs:
           cp assets/icon.png icon.iconset/icon_512x512@2x.png
           iconutil -c icns icon.iconset -o assets/icon.icns
 
+      # The bundled VERSION.txt drives the in-app update banner. Deriving it
+      # from the tag keeps a released build from reporting a stale version and
+      # telling users an update is available for the build they just installed.
+      - name: Stamp version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: core
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "$VERSION" > VERSION.txt
+          echo "Building version $VERSION"
+
       - name: Build executable
         working-directory: core
         shell: bash

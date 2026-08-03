@@ -1,6 +1,6 @@
 async function checkForUpdate() {
   try {
-    const res = await fetch("/api/check-update", {
+    const res = await apiFetch("/api/check-update", {
       cache: "no-store"
     });
 

@@ -49,15 +49,28 @@ async function searchBusinesses() {
             return;
         }
 
-        const categoryParam = selectedCategories.join(",");
-        const typesParam = selectedTypes.join(",");
-        const url = `/api/search?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}&category=${encodeURIComponent(categoryParam)}&types=${encodeURIComponent(typesParam)}`;
+        const response = await apiFetch(apiUrl("/api/search", {
+            query: query,
+            location: location,
+            category: selectedCategories.join(","),
+            types: selectedTypes.join(","),
+        }));
 
-        const response = await fetch(url);
-        const businesses = await response.json();
+        // Errors reach us as JSON, but a crash or a proxy could still return
+        // HTML. Read as text first so a parse failure produces a real message
+        // instead of an unhandled rejection and a silently stopped spinner.
+        const body = await response.text();
+        let businesses;
+        try {
+            businesses = JSON.parse(body);
+        } catch {
+            throw new Error(
+                `The server returned an unexpected response (HTTP ${response.status}).`
+            );
+        }
 
-        if (businesses.error) {
-            alert("Search failed: " + businesses.error);
+        if (!response.ok || businesses.error) {
+            alert("Search failed: " + (businesses.error || `HTTP ${response.status}`));
             return;
         }
 
@@ -88,6 +101,8 @@ async function searchBusinesses() {
 
         const group = new L.featureGroup(currentMarkers);
         map.fitBounds(group.getBounds().pad(0.2));
+    } catch (error) {
+        alert("Search failed: " + error.message);
     } finally {
         setLoading(false);
     }
@@ -99,9 +114,12 @@ const settingsOverlay = document.getElementById("settings-overlay");
 const settingsFields = document.getElementById("settings-fields");
 const settingsStatus = document.getElementById("settings-status");
 
+// Names the user asked to remove; applied on the next save.
+let pendingKeyClears = new Set();
+
 async function loadSettingsFields() {
     try {
-        const response = await fetch("/api/settings", { cache: "no-store" });
+        const response = await apiFetch("/api/settings", { cache: "no-store" });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
         const settings = await response.json();
@@ -117,11 +135,17 @@ async function loadSettingsFields() {
             wrapper.appendChild(label);
 
             if (setting.type === "secret") {
+                const cleared = pendingKeyClears.has(setting.name);
+
                 const current = document.createElement("p");
                 current.className = "settings-current";
-                current.textContent = setting.is_set
-                    ? `Currently set (${setting.preview})`
-                    : "Not set yet";
+                if (cleared) {
+                    current.textContent = "Will be removed when you save";
+                } else {
+                    current.textContent = setting.is_set
+                        ? `Currently set (${setting.preview})`
+                        : "Not set yet";
+                }
 
                 const input = document.createElement("input");
                 input.type = "password";
@@ -133,6 +157,22 @@ async function loadSettingsFields() {
 
                 wrapper.appendChild(current);
                 wrapper.appendChild(input);
+
+                if (setting.is_set) {
+                    const clearBtn = document.createElement("button");
+                    clearBtn.type = "button";
+                    clearBtn.className = "settings-clear-btn";
+                    clearBtn.textContent = cleared ? "Undo remove" : "Remove key";
+                    clearBtn.addEventListener("click", () => {
+                        if (pendingKeyClears.has(setting.name)) {
+                            pendingKeyClears.delete(setting.name);
+                        } else {
+                            pendingKeyClears.add(setting.name);
+                        }
+                        loadSettingsFields();
+                    });
+                    wrapper.appendChild(clearBtn);
+                }
             } else if (setting.type === "select") {
                 const select = document.createElement("select");
                 select.id = `setting-${setting.name}`;
@@ -193,6 +233,7 @@ async function loadSettingsFields() {
 
 function openSettings() {
     settingsStatus.textContent = "";
+    pendingKeyClears = new Set();
     loadSettingsFields();
     settingsOverlay.classList.remove("hidden");
 }
@@ -220,13 +261,17 @@ async function saveSettings() {
         payload.SEARCH_GRID_SIZE = Number(gridSize.value);
     }
 
+    if (pendingKeyClears.size > 0) {
+        payload.clear_keys = [...pendingKeyClears];
+    }
+
     if (Object.keys(payload).length === 0) {
         settingsStatus.textContent = "Nothing to save.";
         return;
     }
 
     try {
-        const response = await fetch("/api/settings", {
+        const response = await apiFetch("/api/settings", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
@@ -241,6 +286,7 @@ async function saveSettings() {
         }
 
         settingsStatus.textContent = "Saved.";
+        pendingKeyClears = new Set();
         await loadSettingsFields();
         await checkApiKeyStatus();
     } catch (error) {
@@ -261,17 +307,23 @@ const analysisTitle = document.getElementById("analysis-panel-title");
 const analysisAddress = document.getElementById("analysis-address");
 const analyzeBtn = document.getElementById("analyze-btn");
 const downloadPdfBtn = document.getElementById("download-pdf-btn");
+const copyAiBtn = document.getElementById("copy-ai-btn");
+const analysisActions = document.getElementById("analysis-actions");
 const businessPhoto = document.getElementById("business-photo");
 const businessPhotoPlaceholder = document.getElementById("business-photo-placeholder");
 const businessRating = document.getElementById("business-rating");
 const businessPhone = document.getElementById("business-phone");
 const businessBadges = document.getElementById("business-badges");
+const businessLinks = document.getElementById("business-links");
 
 let currentBusiness = null;
 let lastAnalysisMarkdown = null;
 
 function setDownloadButtonVisible(visible) {
-    downloadPdfBtn.classList.toggle("hidden", !visible);
+    analysisActions.classList.toggle("hidden", !visible);
+    if (!visible) {
+        copyAiBtn.textContent = "Copy for AI";
+    }
 }
 
 function renderBusinessMeta(biz) {
@@ -303,11 +355,41 @@ function renderBusinessMeta(biz) {
         badge.textContent = label;
         businessBadges.appendChild(badge);
     });
+
+    renderBusinessLinks(biz);
+}
+
+function addBusinessLink(label, href) {
+    const link = document.createElement("a");
+    link.className = "business-link";
+    link.href = href;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = label;
+    businessLinks.appendChild(link);
+}
+
+function renderBusinessLinks(biz) {
+    businessLinks.innerHTML = "";
+
+    if (biz.website_url) {
+        addBusinessLink("🔗 Visit website", biz.website_url);
+    }
+
+    const mapsQuery = encodeURIComponent(`${biz.name} ${biz.address}`);
+    addBusinessLink(
+        "📍 View on Google Maps",
+        `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`
+    );
+
+    if (biz.phone) {
+        addBusinessLink("📞 Call", `tel:${biz.phone.replace(/[^\d+]/g, "")}`);
+    }
 }
 
 function renderBusinessPhoto(biz) {
     if (biz.photo_name) {
-        businessPhoto.src = `/api/photo?name=${encodeURIComponent(biz.photo_name)}`;
+        businessPhoto.src = apiUrl("/api/photo", { name: biz.photo_name });
         businessPhoto.classList.remove("hidden");
         businessPhotoPlaceholder.classList.add("hidden");
         businessPhoto.onerror = () => {
@@ -367,7 +449,7 @@ analyzeBtn.addEventListener("click", () => {
     let fullText = "";
     let firstChunkReceived = false;
 
-    const params = new URLSearchParams({
+    const eventSource = new EventSource(apiUrl("/api/analyze/stream", {
         name: currentBusiness.name,
         address: currentBusiness.address,
         has_website: String(Boolean(currentBusiness.has_website)),
@@ -375,8 +457,7 @@ analyzeBtn.addEventListener("click", () => {
         has_reviews: String(Boolean(currentBusiness.rating_count)),
         has_phone: String(Boolean(currentBusiness.phone)),
         website_url: currentBusiness.website_url || "",
-    });
-    const eventSource = new EventSource(`/api/analyze/stream?${params.toString()}`);
+    }));
 
     eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -407,6 +488,16 @@ analyzeBtn.addEventListener("click", () => {
 
         if (data.done) {
             lastAnalysisMarkdown = fullText;
+
+            if (data.truncated) {
+                const notice = document.createElement("p");
+                notice.className = "analysis-truncated";
+                notice.textContent =
+                    "This report hit the AI provider's output limit and stops early. " +
+                    "Try a provider with a larger output budget in Settings.";
+                analysisContent.appendChild(notice);
+            }
+
             setDownloadButtonVisible(true);
             analyzeBtn.disabled = false;
             analyzeBtn.textContent = "Analyze Marketing Strategies";
@@ -431,6 +522,71 @@ analyzeBtn.addEventListener("click", () => {
     };
 });
 
+function describePdfLine(rawLine) {
+    const line = rawLine.replace(/\s+$/, "");
+
+    if (!line.trim()) {
+        return { type: "blank" };
+    }
+
+    const heading = line.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+        const level = heading[1].length;
+        return {
+            type: "heading",
+            text: stripInlineMarkdown(heading[2]),
+            size: level <= 1 ? 15 : level === 2 ? 13 : 11.5,
+            bold: true,
+            spaceBefore: level <= 2 ? 14 : 10,
+            spaceAfter: 4,
+        };
+    }
+
+    // Markdown table alignment rows (|---|---|) carry no information once the
+    // pipes are rendered as text, so drop them.
+    if (/^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(line) && line.includes("-")) {
+        return { type: "blank" };
+    }
+
+    if (line.trim().startsWith("|")) {
+        const cells = line.trim().replace(/^\||\|$/g, "").split("|");
+        return {
+            type: "text",
+            text: cells.map((c) => stripInlineMarkdown(c.trim())).join("  \u2014  "),
+            indent: 12,
+        };
+    }
+
+    const bullet = line.match(/^(\s*)[-*+]\s+(.*)$/);
+    if (bullet) {
+        const depth = Math.min(Math.floor(bullet[1].length / 2), 3);
+        return {
+            type: "text",
+            text: `\u2022 ${stripInlineMarkdown(bullet[2])}`,
+            indent: 12 + depth * 14,
+        };
+    }
+
+    const numbered = line.match(/^(\s*)(\d+[.)])\s+(.*)$/);
+    if (numbered) {
+        const depth = Math.min(Math.floor(numbered[1].length / 2), 3);
+        return {
+            type: "text",
+            text: `${numbered[2]} ${stripInlineMarkdown(numbered[3])}`,
+            indent: 12 + depth * 14,
+        };
+    }
+
+    return { type: "text", text: stripInlineMarkdown(line) };
+}
+
+function stripInlineMarkdown(text) {
+    return text
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/(^|[^*])\*([^*]+)\*/g, "$1$2")
+        .replace(/`([^`]+)`/g, "$1")
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)");
+}
 
 downloadPdfBtn.addEventListener("click", () => {
     if (!lastAnalysisMarkdown || !currentBusiness) return;
@@ -440,43 +596,127 @@ downloadPdfBtn.addEventListener("click", () => {
 
     const marginLeft = 48;
     const maxWidth = 515;
+    const pageBottom = 740;
+    const bodySize = 10.5;
     let y = 60;
 
-    doc.setFontSize(16);
-    doc.text(currentBusiness.name, marginLeft, y);
-    y += 22;
-
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.text(currentBusiness.address, marginLeft, y);
-    y += 28;
-
-    doc.setTextColor(0);
-    doc.setFontSize(11);
-
-    const plainText = lastAnalysisMarkdown
-        .replace(/\*\*(.*?)\*\*/g, "$1")
-        .replace(/^#+\s*/gm, "")
-        .replace(/^[-*]\s+/gm, "\u2022 ");
-
-    const lines = doc.splitTextToSize(plainText, maxWidth);
-
-    lines.forEach((line) => {
-        if (y > 740) {
+    function newPageIfNeeded(needed) {
+        if (y + needed > pageBottom) {
             doc.addPage();
             y = 60;
         }
-        doc.text(line, marginLeft, y);
-        y += 16;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(17);
+    doc.text(currentBusiness.name, marginLeft, y);
+    y += 22;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(currentBusiness.address, marginLeft, y);
+    y += 14;
+
+    if (currentBusiness.website_url) {
+        doc.text(currentBusiness.website_url, marginLeft, y);
+        y += 14;
+    }
+
+    doc.text(
+        `Prospectr marketing analysis \u2014 ${new Date().toLocaleDateString()}`,
+        marginLeft,
+        y
+    );
+    y += 24;
+    doc.setTextColor(0);
+
+    let inCodeBlock = false;
+
+    lastAnalysisMarkdown.split("\n").forEach((rawLine) => {
+        if (rawLine.trim().startsWith("```")) {
+            inCodeBlock = !inCodeBlock;
+            y += 4;
+            return;
+        }
+
+        if (inCodeBlock) {
+            doc.setFont("courier", "normal");
+            doc.setFontSize(9);
+            doc.splitTextToSize(rawLine || " ", maxWidth - 12).forEach((wrapped) => {
+                newPageIfNeeded(12);
+                doc.text(wrapped, marginLeft + 12, y);
+                y += 12;
+            });
+            return;
+        }
+
+        const spec = describePdfLine(rawLine);
+
+        if (spec.type === "blank") {
+            y += 6;
+            return;
+        }
+
+        if (spec.type === "heading") {
+            y += spec.spaceBefore;
+            newPageIfNeeded(spec.size + spec.spaceAfter);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(spec.size);
+            doc.splitTextToSize(spec.text, maxWidth).forEach((wrapped) => {
+                newPageIfNeeded(spec.size + 4);
+                doc.text(wrapped, marginLeft, y);
+                y += spec.size + 4;
+            });
+            y += spec.spaceAfter;
+            return;
+        }
+
+        const indent = spec.indent || 0;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(bodySize);
+        doc.splitTextToSize(spec.text, maxWidth - indent).forEach((wrapped) => {
+            newPageIfNeeded(15);
+            doc.text(wrapped, marginLeft + indent, y);
+            y += 15;
+        });
     });
 
     const safeName = currentBusiness.name.replace(/[^a-z0-9]+/gi, "_");
     doc.save(`${safeName}_marketing_analysis.pdf`);
 });
 
+copyAiBtn.addEventListener("click", async () => {
+    if (!lastAnalysisMarkdown || !currentBusiness) return;
+
+    const payload = [
+        `# Marketing analysis: ${currentBusiness.name}`,
+        `Address: ${currentBusiness.address}`,
+        currentBusiness.website_url
+            ? `Existing website: ${currentBusiness.website_url}`
+            : "Existing website: none listed on Google",
+        `Generated by Prospectr on ${new Date().toLocaleDateString()}`,
+        "",
+        "---",
+        "",
+        lastAnalysisMarkdown,
+    ].join("\n");
+
+    try {
+        await navigator.clipboard.writeText(payload);
+        copyAiBtn.textContent = "Copied ✓";
+    } catch {
+        copyAiBtn.textContent = "Copy failed";
+    }
+
+    setTimeout(() => {
+        copyAiBtn.textContent = "Copy for AI";
+    }, 2000);
+});
+
 
 async function checkApiKeyStatus() {
-    const response = await fetch("/api/settings");
+    const response = await apiFetch("/api/settings");
     const keyStatuses = await response.json();
 
     const googleKey = keyStatuses.find((k) => k.name === "GOOGLE_PLACES_API_KEY");
@@ -599,10 +839,9 @@ document.getElementById("types-clear-btn").addEventListener("click", () => {
 
 checkApiKeyStatus();
 
-setInterval(() => {
-    fetch("/api/heartbeat", { method: "POST" }).catch(() => {});
-}, 3000);
+function sendHeartbeat() {
+    apiFetch("/api/heartbeat", { method: "POST" }).catch(() => {});
+}
 
-window.addEventListener("beforeunload", () => {
-    navigator.sendBeacon("/api/shutdown");
-});
+sendHeartbeat();
+setInterval(sendHeartbeat, 3000);
