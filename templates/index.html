@@ -27,12 +27,38 @@
 
     <div id="update-banner" style="display:none;">
         A new version of Prospectr is available.
+        <button id="update-now-btn">Update Now</button>
         <a id="update-link" href="#" target="_blank" rel="noopener noreferrer">
             Download it here
         </a>
         <button onclick="document.getElementById('update-banner').style.display='none'">
             Dismiss
         </button>
+    </div>
+
+    <div id="update-overlay" class="hidden">
+        <div class="settings-panel" role="dialog" aria-label="Update Prospectr">
+            <div class="settings-header">
+                <h2>Update Prospectr</h2>
+                <button id="update-close-btn" aria-label="Close">&times;</button>
+            </div>
+            <p id="update-dialog-message">
+                A new version of Prospectr is available. Update now? The app will restart.
+            </p>
+            <div id="update-progress-track" class="update-progress-track hidden">
+                <div id="update-progress-bar" class="update-progress-bar"></div>
+            </div>
+            <div id="update-dialog-actions">
+                <button id="update-confirm-btn">Update Now</button>
+                <button id="update-cancel-btn">Not Now</button>
+            </div>
+            <p id="update-dialog-fallback" class="hidden">
+                Couldn't update automatically —
+                <a id="update-fallback-link" href="#" target="_blank" rel="noopener noreferrer">
+                    download the update manually
+                </a>.
+            </p>
+        </div>
     </div>
 
     <div id="version-badge">Checking version...</div>

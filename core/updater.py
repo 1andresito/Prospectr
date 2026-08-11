@@ -3,6 +3,12 @@ from pathlib import Path
 import requests
 import re
 
+PLATFORM_ASSET_NAMES = {
+    "win32": "Prospectr-Windows.zip",
+    "darwin": "Prospectr-Mac.zip",
+    "linux": "Prospectr-x86_64.AppImage",
+}
+
 if getattr(sys, "frozen", False):
     RESOURCE_DIR = Path(sys._MEIPASS)
 else:
@@ -66,6 +72,14 @@ def get_latest_release():
                 f"https://github.com/{GITHUB_REPO}/releases/latest",
             ),
             "published_at": data.get("published_at"),
+            "assets": [
+                {
+                    "name": asset.get("name"),
+                    "browser_download_url": asset.get("browser_download_url"),
+                }
+                for asset in data.get("assets", [])
+                if asset.get("name") and asset.get("browser_download_url")
+            ],
         }
 
     except requests.exceptions.Timeout:
@@ -76,6 +90,31 @@ def get_latest_release():
         return None
     except (ValueError, TypeError, KeyError):
         return None
+
+
+def pick_asset_for_platform(assets, platform=None):
+    """
+    Pick the release asset matching the current (or given) platform.
+
+    Returns the asset dict (with "name" and "browser_download_url"), or
+    None if no matching asset is published for this platform.
+    """
+    platform = platform if platform is not None else sys.platform
+
+    asset_name = None
+    for prefix, name in PLATFORM_ASSET_NAMES.items():
+        if platform.startswith(prefix):
+            asset_name = name
+            break
+
+    if asset_name is None:
+        return None
+
+    for asset in assets or []:
+        if asset.get("name") == asset_name:
+            return asset
+
+    return None
 
 
 def version_tuple(version):

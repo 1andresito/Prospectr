@@ -88,3 +88,33 @@ def test_padded_release_is_not_treated_as_newer(fake_versions):
     status = updater.get_update_status()
 
     assert status["update_available"] is False
+
+
+ALL_ASSETS = [
+    {"name": "Prospectr-Windows.zip", "browser_download_url": "https://example.invalid/win"},
+    {"name": "Prospectr-Mac.zip", "browser_download_url": "https://example.invalid/mac"},
+    {"name": "Prospectr-x86_64.AppImage", "browser_download_url": "https://example.invalid/linux"},
+]
+
+
+@pytest.mark.parametrize(
+    "platform, expected_url",
+    [
+        ("win32", "https://example.invalid/win"),
+        ("darwin", "https://example.invalid/mac"),
+        ("linux", "https://example.invalid/linux"),
+        ("linux2", "https://example.invalid/linux"),
+    ],
+)
+def test_pick_asset_for_platform(platform, expected_url):
+    asset = updater.pick_asset_for_platform(ALL_ASSETS, platform=platform)
+    assert asset is not None
+    assert asset["browser_download_url"] == expected_url
+
+
+def test_pick_asset_for_platform_unknown_platform():
+    assert updater.pick_asset_for_platform(ALL_ASSETS, platform="sunos") is None
+
+
+def test_pick_asset_for_platform_missing_asset():
+    assert updater.pick_asset_for_platform([], platform="win32") is None

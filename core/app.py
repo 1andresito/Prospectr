@@ -33,7 +33,8 @@ from analysis import generate_marketing_analysis_stream
 from providers import TRUNCATED
 from research import research_business
 from migrations import run_migrations
-from updater import get_update_status
+from updater import get_update_status, get_latest_release, pick_asset_for_platform
+import self_update
 import os
 
 if getattr(sys, "frozen", False):
@@ -154,6 +155,36 @@ def home():
 @app.route("/api/check-update")
 def check_update():
     return get_update_status()
+
+
+@app.route("/api/apply-update", methods=["POST"])
+def apply_update():
+    if not self_update.is_supported():
+        return jsonify(
+            error="Self-update is only available in packaged builds."
+        ), 400
+
+    status = get_update_status()
+    if not status.get("update_available"):
+        return jsonify(error="No update is available."), 400
+
+    release = get_latest_release()
+    asset = pick_asset_for_platform(release["assets"]) if release else None
+    if asset is None:
+        return jsonify(
+            error="No update download is available for this platform."
+        ), 400
+
+    threading.Thread(
+        target=self_update.run_update, args=(asset,), daemon=True
+    ).start()
+
+    return jsonify(status=self_update.get_status()), 202
+
+
+@app.route("/api/update-status")
+def update_status():
+    return jsonify(self_update.get_status())
 
 
 @app.route("/api/heartbeat", methods=["POST"])

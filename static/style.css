@@ -281,6 +281,87 @@ body {
     background: rgba(255, 255, 255, 0.25);
 }
 
+#update-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+#update-overlay.hidden {
+    display: none;
+}
+
+#update-dialog-message {
+    font-size: 0.9rem;
+    color: #334155;
+}
+
+.update-progress-track {
+    height: 8px;
+    border-radius: 4px;
+    background: #e2e8f0;
+    overflow: hidden;
+    margin: 14px 0;
+}
+
+.update-progress-track.hidden {
+    display: none;
+}
+
+.update-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: #2563eb;
+    transition: width 0.2s ease;
+}
+
+#update-dialog-actions {
+    display: flex;
+    gap: 10px;
+}
+
+#update-dialog-actions button {
+    flex: 1;
+    padding: 10px;
+    cursor: pointer;
+}
+
+#update-confirm-btn {
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+}
+
+#update-confirm-btn:hover {
+    background: #1d4ed8;
+}
+
+#update-confirm-btn:disabled {
+    background: #93c5fd;
+    cursor: default;
+}
+
+#update-cancel-btn {
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+}
+
+#update-dialog-fallback {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin: 10px 0 0 0;
+}
+
+#update-dialog-fallback.hidden {
+    display: none;
+}
+
 #analysis-panel {
     position: fixed;
     top: 0;
