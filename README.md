@@ -79,7 +79,7 @@ Your key is stored locally and only needs to be entered once.
 
 ## For developers
 
-Run from source (auto-reloads on code changes, good for development):
+Run from source :
 
 ```bash
 
@@ -101,8 +101,7 @@ pytest
 
 Frontend libraries (Leaflet, jsPDF, marked, DOMPurify) are vendored in
 `static/vendor/` rather than loaded from a CDN, so the packaged app still
-starts without an internet connection. Map tiles are the one part that
-genuinely needs the network.
+starts without an internet connection. Map tiles are the one part that needs the network.
 
 ## Building a new release
 
